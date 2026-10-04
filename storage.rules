@@ -1,0 +1,46 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Public read for public product and service images
+    match /products/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    match /services/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    match /used-products/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // User / Customer uploads (service requests, payments, profiles)
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    match /service-requests/{requestId}/{allPaths=**} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /inspections/{inspectionId}/{allPaths=**} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /payments/{paymentId}/{allPaths=**} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /chat/{conversationId}/{allPaths=**} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

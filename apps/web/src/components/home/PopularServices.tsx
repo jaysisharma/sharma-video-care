@@ -1,0 +1,207 @@
+"use client";
+
+import React from "react";
+import Link from "next/link";
+import {
+  ACIcon,
+  WashingMachineIcon,
+  TVIcon,
+  CameraIcon,
+  LaptopIcon,
+  CCTVIcon,
+  MobileIcon,
+  HomeApplianceIcon,
+  TVWallMountIcon,
+  OtherServicesIcon,
+} from "@/components/ServiceIcons";
+
+const SERVICES = [
+  {
+    title: "AC Repair",
+    icon: <ACIcon size={40} />,
+    href: "/services/request?service=ac",
+  },
+  {
+    title: "Washing Machine Repair",
+    icon: <WashingMachineIcon size={40} />,
+    href: "/services/request?service=washing_machine",
+  },
+  {
+    title: "TV Repair",
+    icon: <TVIcon size={40} />,
+    href: "/services/request?service=tv",
+  },
+  {
+    title: "Camera Repair",
+    icon: <CameraIcon size={40} />,
+    href: "/services/request?service=camera",
+  },
+  {
+    title: "Laptop Repair",
+    icon: <LaptopIcon size={40} />,
+    href: "/services/request?service=laptop",
+  },
+  {
+    title: "CCTV Installation",
+    icon: <CCTVIcon size={40} />,
+    href: "/services/request?service=cctv",
+  },
+  {
+    title: "Mobile Repair",
+    icon: <MobileIcon size={40} />,
+    href: "/services/request?service=mobile",
+  },
+  {
+    title: "Home Appliance",
+    icon: <HomeApplianceIcon size={40} />,
+    href: "/services/request?service=home_appliance",
+  },
+  {
+    title: "TV Wall Mounting",
+    icon: <TVWallMountIcon size={40} />,
+    href: "/services/request?service=tv_wall_mount",
+  },
+  {
+    title: "Other Services",
+    icon: <OtherServicesIcon size={40} />,
+    href: "/services/custom",
+  },
+];
+
+export const PopularServices: React.FC = () => {
+  return (
+    <section
+      style={{
+        width: "100%",
+        padding: "0 24px 36px 24px",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "1280px",
+          margin: "0 auto",
+        }}
+      >
+        {/* Section Header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "16px",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: "20px",
+              fontWeight: 800,
+              color: "#181512",
+              letterSpacing: "-0.015em",
+              margin: 0,
+            }}
+          >
+            Popular Services
+          </h2>
+          <Link
+            href="/services"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              fontSize: "13px",
+              fontWeight: 650,
+              color: "#4B443B",
+              textDecoration: "none",
+              transition: "color 0.15s ease",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#E86F1C")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "#4B443B")}
+          >
+            <span>View All Services</span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="5" y1="12" x2="19" y2="12" />
+              <polyline points="12 5 19 12 12 19" />
+            </svg>
+          </Link>
+        </div>
+
+        {/* 10 Services Grid */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(105px, 1fr))",
+            gap: "12px",
+          }}
+        >
+          {SERVICES.map((service, index) => (
+            <Link
+              key={index}
+              href={service.href}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                padding: "16px 8px 14px 8px",
+                background: "#FFFFFF",
+                border: "1px solid #EBE7DF",
+                borderRadius: "14px",
+                textDecoration: "none",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
+                transition: "all 0.15s ease",
+                cursor: "pointer",
+                minHeight: "110px",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#E86F1C";
+                e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.boxShadow =
+                  "0 6px 16px rgba(232, 111, 28, 0.12)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "#EBE7DF";
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow =
+                  "0 1px 3px rgba(0, 0, 0, 0.02)";
+              }}
+            >
+              <div
+                style={{
+                  height: "44px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: "8px",
+                }}
+              >
+                {service.icon}
+              </div>
+              <span
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 650,
+                  color: "#24201D",
+                  lineHeight: 1.25,
+                  maxWidth: "95px",
+                  wordBreak: "break-word",
+                }}
+              >
+                {service.title}
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};

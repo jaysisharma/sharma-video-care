@@ -1,0 +1,15 @@
+{
+  "name": "sharma-video-care",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm --workspace=apps/web run dev",
+    "build": "npm --workspace=apps/web run build",
+    "start": "npm --workspace=apps/web run start",
+    "lint": "npm --workspace=apps/web run lint"
+  }
+}

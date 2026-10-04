@@ -1,0 +1,29 @@
+name: sharma_video_care_mobile
+description: "Sharma Video Care Mobile App for iOS and Android"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_core: ^3.6.0
+  cloud_firestore: ^5.4.4
+  firebase_auth: ^5.3.1
+  flutter_bloc: ^8.1.6
+  intl: ^0.19.0
+  cached_network_image: ^3.4.1
+  google_fonts: ^6.2.1
+  shared_preferences: ^2.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

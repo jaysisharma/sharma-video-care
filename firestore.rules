@@ -1,0 +1,218 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isUser(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'admin' ||
+        getUserData().role == 'admin'
+      );
+    }
+
+    function isTechnician() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'technician' ||
+        getUserData().role == 'technician'
+      );
+    }
+
+    // Public / Configuration
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Users
+    match /users/{userId} {
+      allow read: if isUser(userId) || isAdmin();
+      // Allow users to create their own customer record upon signup, but cannot self-assign admin/technician role
+      allow create: if isAuthenticated() && request.auth.uid == userId && (
+        request.resource.data.role == 'customer' ||
+        (request.resource.data.role == 'technician' && isAdmin()) ||
+        isAdmin()
+      );
+      allow update: if isAdmin() || (
+        isUser(userId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'technicianType'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Customers
+    match /customers/{userId} {
+      allow read, write: if isUser(userId) || isAdmin();
+    }
+
+    // Technicians
+    match /technicians/{technicianId} {
+      allow read: if isUser(technicianId) || isAdmin();
+      allow write: if isAdmin() || (
+        isUser(technicianId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availability', 'updatedAt'])
+      );
+    }
+
+    // Service Categories & Services (Public Catalog)
+    match /serviceCategories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Service Requests
+    match /serviceRequests/{requestId} {
+      allow read: if isAdmin() ||
+        (isAuthenticated() && resource.data.customerId == request.auth.uid) ||
+        (isTechnician() && resource.data.assignedTechnicianId == request.auth.uid);
+      allow create: if ((isAuthenticated() && request.resource.data.customerId == request.auth.uid) || request.resource.data.customerId.matches('^guest-.*')) &&
+        request.resource.data.status == 'REQUESTED';
+      allow update: if isAdmin() ||
+        (isAuthenticated() && resource.data.customerId == request.auth.uid &&
+          (request.resource.data.status == 'CANCELLED' || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['preferredSchedule', 'notes', 'updatedAt']))) ||
+        (isTechnician() && resource.data.assignedTechnicianId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // Inspections
+    match /inspections/{inspectionId} {
+      allow read: if isAdmin() ||
+        (isTechnician() && resource.data.technicianId == request.auth.uid) ||
+        (isAuthenticated() && get(/databases/$(database)/documents/serviceRequests/$(resource.data.serviceRequestId)).data.customerId == request.auth.uid);
+      allow create: if isAdmin() ||
+        (isTechnician() && request.resource.data.technicianId == request.auth.uid);
+      allow update: if isAdmin() ||
+        (isTechnician() && resource.data.technicianId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // Quotes
+    match /quotes/{quoteId} {
+      allow read: if isAdmin() ||
+        (isAuthenticated() && resource.data.customerId == request.auth.uid);
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (
+        isAuthenticated() && resource.data.customerId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'rejectedAt', 'updatedAt']) &&
+        (request.resource.data.status == 'ACCEPTED' || request.resource.data.status == 'REJECTED')
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Products & Categories
+    match /productCategories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Used Products (Sharma Video Care only)
+    match /usedProducts/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Source on Request
+    match /sourceRequests/{requestId} {
+      allow read: if isAdmin() ||
+        (isAuthenticated() && resource.data.customerId == request.auth.uid);
+      allow create: if (isAuthenticated() && request.resource.data.customerId == request.auth.uid) ||
+        request.resource.data.customerId.matches('^guest-.*');
+      allow update: if isAdmin() ||
+        (isAuthenticated() && resource.data.customerId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notes', 'status', 'updatedAt']));
+      allow delete: if isAdmin();
+    }
+
+    // Orders
+    match /orders/{orderId} {
+      allow read: if isAdmin() ||
+        (isAuthenticated() && resource.data.customerId == request.auth.uid);
+      allow create: if ((isAuthenticated() && request.resource.data.customerId == request.auth.uid) || request.resource.data.customerId.matches('^guest-.*')) &&
+        (request.resource.data.orderStatus == 'PENDING_PAYMENT' || request.resource.data.orderStatus == 'CONFIRMED');
+      allow update: if isAdmin() ||
+        (isAuthenticated() && resource.data.customerId == request.auth.uid &&
+          (request.resource.data.orderStatus == 'CANCELLED' || request.resource.data.orderStatus == 'RETURN_REQUESTED'));
+      allow delete: if isAdmin();
+    }
+
+    // Payments
+    match /payments/{paymentId} {
+      allow read: if isAdmin() ||
+        (isAuthenticated() && resource.data.customerId == request.auth.uid);
+      allow create: if isAuthenticated() &&
+        request.resource.data.customerId == request.auth.uid &&
+        request.resource.data.status == 'PENDING_VERIFICATION';
+      allow update: if isAdmin(); // Only Admin can verify payments
+      allow delete: if isAdmin();
+    }
+
+    // Conversations & Messages (Chat & Live Support)
+    match /conversations/{conversationId} {
+      allow read: if true;
+      allow create, update: if true;
+
+      match /messages/{messageId} {
+        allow read: if true;
+        allow create: if true;
+        allow update: if isAuthenticated() || isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // Top-level Messages (if used as flat collection)
+    match /messages/{messageId} {
+      allow read: if isAdmin() ||
+        (isAuthenticated() && (
+          resource.data.senderId == request.auth.uid ||
+          request.auth.uid in resource.data.recipientIds
+        ));
+      allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
+      allow update: if isAdmin() || (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy']));
+    }
+
+    // Reviews
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.customerId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.customerId == request.auth.uid);
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow read: if isAdmin() ||
+        (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin();
+      allow update: if isAdmin() ||
+        (isAuthenticated() && resource.data.userId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']));
+      allow delete: if isAdmin() ||
+        (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+
+    // Audit Logs
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+  }
+}

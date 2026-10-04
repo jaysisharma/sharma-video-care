@@ -1,0 +1,32 @@
+{
+  "brand": {
+    "primary": "#E86F1C",
+    "primaryDark": "#C9570E",
+    "primarySoft": "#FFF1E6",
+    "ink": "#111111",
+    "canvas": "#F7F4EF",
+    "surface": "#FFFFFF",
+    "border": "#E4DED6",
+    "muted": "#6F6A63",
+    "success": "#238B57",
+    "warning": "#B7791F",
+    "danger": "#C83E3E",
+    "info": "#2867B2"
+  },
+  "type": {
+    "fontFamily": "Inter",
+    "headingWeight": 700,
+    "bodyWeight": 400,
+    "buttonWeight": 600
+  },
+  "shape": {
+    "radiusSm": 8,
+    "radiusMd": 12,
+    "radiusLg": 18,
+    "radiusXl": 24
+  },
+  "spacing": {
+    "unit": 4,
+    "section": 80
+  }
+}
