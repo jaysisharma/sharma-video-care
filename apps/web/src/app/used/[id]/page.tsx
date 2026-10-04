@@ -251,13 +251,21 @@ export default function UsedProductDetailPage() {
               </span>
 
               <div style={{ position: "relative", width: "100%", height: "100%" }}>
-                <Image
-                  src={imageSrc}
-                  alt={item.name}
-                  fill
-                  priority
-                  style={{ objectFit: "contain", objectPosition: "center" }}
-                />
+                {imageSrc.startsWith("http") ? (
+                  <img
+                    src={imageSrc}
+                    alt={item.name}
+                    style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center" }}
+                  />
+                ) : (
+                  <Image
+                    src={imageSrc}
+                    alt={item.name}
+                    fill
+                    priority
+                    style={{ objectFit: "contain", objectPosition: "center" }}
+                  />
+                )}
               </div>
             </div>
 

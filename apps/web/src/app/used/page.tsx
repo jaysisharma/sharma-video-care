@@ -20,11 +20,9 @@ import {
   ArrowRight,
   ShoppingCart,
   Check,
-  AlertTriangle,
   RotateCcw,
   Camera,
   Compass,
-  Sparkles,
   ClipboardCheck,
   PhoneCall,
 } from "lucide-react";
@@ -84,8 +82,7 @@ export default function UsedProductsPage() {
         item.brand.toLowerCase().includes(q) ||
         item.model.toLowerCase().includes(q) ||
         item.usageMetric.toLowerCase().includes(q) ||
-        item.conditionDescription.toLowerCase().includes(q) ||
-        (item.knownDefects && item.knownDefects.some((d) => d.toLowerCase().includes(q)));
+        item.conditionDescription.toLowerCase().includes(q);
 
       const matchesCategory =
         selectedCategory === "All" ||
@@ -141,161 +138,123 @@ export default function UsedProductsPage() {
 
   return (
     <div style={{ background: "#F8FAFC", minHeight: "100vh" }}>
-      {/* Streamlined Header */}
+      {/* Clean Compact Header */}
       <section
         style={{
           background: "#FFFFFF",
           borderBottom: "1px solid #E2E8F0",
-          padding: "2rem 1.25rem 1.75rem 1.25rem",
+          padding: "1.5rem 1.25rem",
         }}
       >
-        <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
-          {/* Breadcrumb */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "12.5px",
-              color: "#64748B",
-              marginBottom: "8px",
-            }}
-          >
-            <Link href="/" style={{ color: "#64748B", textDecoration: "none" }}>
-              Home
-            </Link>
-            <span>/</span>
-            <span style={{ color: "#0F172A", fontWeight: 600 }}>Certified Pre-Owned</span>
+        <div
+          style={{
+            maxWidth: "1280px",
+            margin: "0 auto",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "1rem",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: "12px",
+                color: "#64748B",
+                marginBottom: "2px",
+              }}
+            >
+              <Link href="/" style={{ color: "#64748B", textDecoration: "none" }}>
+                Home
+              </Link>{" "}
+              / <span style={{ color: "#0F172A", fontWeight: 600 }}>Certified Pre-Owned</span>
+            </div>
+            <h1
+              style={{
+                fontSize: "1.65rem",
+                fontWeight: 800,
+                color: "#0F172A",
+                margin: 0,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              Certified Pre-Owned Equipment
+            </h1>
+            <p style={{ fontSize: "13px", color: "#64748B", margin: "2px 0 0 0" }}>
+              100% in-house owned, bench-tested, and warranted by Sharma Video Care technicians.
+            </p>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-end",
-              flexWrap: "wrap",
-              gap: "1.25rem",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  background: "#ECFDF5",
-                  color: "#059669",
-                  border: "1px solid #D1FAE5",
-                  padding: "3px 8px",
-                  borderRadius: "6px",
-                  fontSize: "11.5px",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
-                  marginBottom: "0.5rem",
-                }}
-              >
-                <ShieldCheck size={14} /> 100% In-House Tested & Owned
-              </div>
-
-              <h1
-                style={{
-                  fontSize: "1.85rem",
-                  fontWeight: 800,
-                  color: "#0F172A",
-                  letterSpacing: "-0.02em",
-                  margin: "0 0 0.35rem 0",
-                  lineHeight: 1.2,
-                }}
-              >
-                Certified Pre-Owned Inventory
-              </h1>
-              <p
-                style={{
-                  fontSize: "14px",
-                  color: "#475569",
-                  margin: 0,
-                  maxWidth: "760px",
-                  lineHeight: 1.5,
-                }}
-              >
-                Zero third-party sellers. Every camera, lens, and drone is owned, bench-tested, and
-                warranted by Sharma Video Care technicians with disclosed shutter counts and defect records.
-              </p>
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <Link
-                href="/shop"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  background: "#FFFFFF",
-                  color: "#0F172A",
-                  padding: "8px 14px",
-                  borderRadius: "6px",
-                  fontSize: "13px",
-                  fontWeight: 650,
-                  textDecoration: "none",
-                  border: "1px solid #CBD5E1",
-                }}
-              >
-                <span>New Products Store</span>
-                <ArrowRight size={14} />
-              </Link>
-            </div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <Link
+              href="/contact"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "#0F172A",
+                color: "#FFFFFF",
+                padding: "8px 14px",
+                borderRadius: "6px",
+                fontSize: "12.5px",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              <span>Trade-In Valuation</span>
+              <ArrowRight size={13} />
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Main Content */}
-      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "1.75rem 1.25rem 4rem 1.25rem" }}>
-        {/* Filter Controls Row */}
+      {/* Main Content Area */}
+      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "1.5rem 1.25rem 4rem 1.25rem" }}>
+        {/* Compact Filters Toolbar */}
         <div
           style={{
             background: "#FFFFFF",
             border: "1px solid #E2E8F0",
-            borderRadius: "10px",
-            padding: "12px 16px",
-            marginBottom: "1.75rem",
+            borderRadius: "8px",
+            padding: "10px 14px",
+            marginBottom: "1.5rem",
             display: "flex",
             alignItems: "center",
-            gap: "12px",
+            gap: "10px",
             flexWrap: "wrap",
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
           }}
         >
           {/* Search Box */}
           <div
             style={{
               position: "relative",
-              flex: "1 1 240px",
+              flex: "1 1 220px",
               display: "flex",
               alignItems: "center",
             }}
           >
             <Search
-              size={16}
+              size={15}
               style={{
                 position: "absolute",
-                left: "12px",
+                left: "10px",
                 color: "#94A3B8",
                 pointerEvents: "none",
               }}
             />
             <input
               type="text"
-              placeholder="Search cameras, lenses, drones, shutter counts..."
+              placeholder="Search model, brand, shutter count..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
                 width: "100%",
-                height: "36px",
-                padding: "0 34px 0 36px",
-                borderRadius: "6px",
+                height: "34px",
+                padding: "0 30px 0 32px",
+                borderRadius: "5px",
                 border: "1px solid #CBD5E1",
-                fontSize: "13px",
+                fontSize: "12.5px",
                 color: "#0F172A",
                 outline: "none",
                 background: "#FFFFFF",
@@ -307,7 +266,7 @@ export default function UsedProductsPage() {
                 onClick={() => setSearch("")}
                 style={{
                   position: "absolute",
-                  right: "10px",
+                  right: "8px",
                   background: "none",
                   border: "none",
                   cursor: "pointer",
@@ -316,23 +275,23 @@ export default function UsedProductsPage() {
                   display: "flex",
                 }}
               >
-                <X size={14} />
+                <X size={13} />
               </button>
             )}
           </div>
 
           {/* Category Filter */}
-          <div style={{ flex: "0 1 160px", minWidth: "140px" }}>
+          <div style={{ flex: "0 1 150px" }}>
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               style={{
                 width: "100%",
-                height: "36px",
-                padding: "0 10px",
-                borderRadius: "6px",
+                height: "34px",
+                padding: "0 8px",
+                borderRadius: "5px",
                 border: "1px solid #CBD5E1",
-                fontSize: "13px",
+                fontSize: "12.5px",
                 color: "#0F172A",
                 background: "#FFFFFF",
                 fontWeight: 550,
@@ -349,17 +308,17 @@ export default function UsedProductsPage() {
           </div>
 
           {/* Condition Grade Filter */}
-          <div style={{ flex: "0 1 180px", minWidth: "150px" }}>
+          <div style={{ flex: "0 1 160px" }}>
             <select
               value={selectedGrade}
               onChange={(e) => setSelectedGrade(e.target.value)}
               style={{
                 width: "100%",
-                height: "36px",
-                padding: "0 10px",
-                borderRadius: "6px",
+                height: "34px",
+                padding: "0 8px",
+                borderRadius: "5px",
                 border: "1px solid #CBD5E1",
-                fontSize: "13px",
+                fontSize: "12.5px",
                 color: "#0F172A",
                 background: "#FFFFFF",
                 fontWeight: 550,
@@ -367,7 +326,7 @@ export default function UsedProductsPage() {
                 outline: "none",
               }}
             >
-              <option value="All Grades">All Condition Grades</option>
+              <option value="All Grades">All Grades</option>
               <option value="LIKE_NEW">Grade A+ (Like New)</option>
               <option value="EXCELLENT">Grade A (Excellent)</option>
               <option value="GOOD">Grade B (Good)</option>
@@ -375,17 +334,17 @@ export default function UsedProductsPage() {
           </div>
 
           {/* Sort Dropdown */}
-          <div style={{ flex: "0 1 170px", minWidth: "140px" }}>
+          <div style={{ flex: "0 1 150px" }}>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
               style={{
                 width: "100%",
-                height: "36px",
-                padding: "0 10px",
-                borderRadius: "6px",
+                height: "34px",
+                padding: "0 8px",
+                borderRadius: "5px",
                 border: "1px solid #CBD5E1",
-                fontSize: "13px",
+                fontSize: "12.5px",
                 color: "#0F172A",
                 background: "#FFFFFF",
                 fontWeight: 550,
@@ -393,18 +352,14 @@ export default function UsedProductsPage() {
                 outline: "none",
               }}
             >
-              <option value="FEATURED">Sort: Featured</option>
+              <option value="FEATURED">Featured</option>
               <option value="PRICE_ASC">Price: Low to High</option>
               <option value="PRICE_DESC">Price: High to Low</option>
             </select>
           </div>
 
-          {/* Results Count & Clear */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginLeft: "auto" }}>
-            <span style={{ fontSize: "13px", color: "#64748B" }}>
-              Showing <strong style={{ color: "#0F172A" }}>{sorted.length}</strong> verified units
-            </span>
-
+          {/* Clear Filters (if active) */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "auto" }}>
             {(search || selectedCategory !== "All" || selectedGrade !== "All Grades") && (
               <button
                 type="button"
@@ -417,47 +372,48 @@ export default function UsedProductsPage() {
                   background: "none",
                   border: "none",
                   color: "#E86F1C",
-                  fontSize: "12.5px",
+                  fontSize: "12px",
                   fontWeight: 650,
                   cursor: "pointer",
-                  padding: "4px 8px",
+                  padding: "2px 6px",
                 }}
               >
-                Reset
+                Clear
               </button>
             )}
           </div>
         </div>
 
-        {/* Listings Grid */}
+        {/* Clean, Visual-First Grid (No Text Walls!) */}
         {loading ? (
           <div
             style={{
               textAlign: "center",
-              padding: "5rem 0",
+              padding: "4rem 0",
               background: "#FFFFFF",
-              borderRadius: "12px",
+              borderRadius: "8px",
               border: "1px solid #E2E8F0",
               color: "#64748B",
+              fontSize: "13px",
             }}
           >
-            Loading certified pre-owned equipment...
+            Loading certified inventory...
           </div>
         ) : sorted.length === 0 ? (
           <div
             style={{
               textAlign: "center",
-              padding: "4.5rem 2rem",
+              padding: "3.5rem 2rem",
               background: "#FFFFFF",
-              borderRadius: "12px",
+              borderRadius: "8px",
               border: "1px solid #E2E8F0",
             }}
           >
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 700, color: "#0F172A", margin: "0 0 0.5rem 0" }}>
-              No certified equipment matching your filters
+            <h3 style={{ fontSize: "1.15rem", fontWeight: 700, color: "#0F172A", margin: "0 0 0.5rem 0" }}>
+              No matching certified equipment
             </h3>
-            <p style={{ color: "#64748B", fontSize: "14px", margin: "0 0 1.5rem 0" }}>
-              Try clearing your search query or grade filters to see all available units.
+            <p style={{ color: "#64748B", fontSize: "13px", margin: "0 0 1.25rem 0" }}>
+              Try resetting your filters to explore available units.
             </p>
             <button
               type="button"
@@ -470,9 +426,9 @@ export default function UsedProductsPage() {
                 background: "#E86F1C",
                 color: "#FFFFFF",
                 border: "none",
-                padding: "10px 20px",
-                borderRadius: "6px",
-                fontSize: "13px",
+                padding: "8px 16px",
+                borderRadius: "5px",
+                fontSize: "12.5px",
                 fontWeight: 650,
                 cursor: "pointer",
               }}
@@ -484,8 +440,8 @@ export default function UsedProductsPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))",
-              gap: "22px",
+              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+              gap: "18px",
             }}
           >
             {sorted.map((item) => {
@@ -496,23 +452,20 @@ export default function UsedProductsPage() {
                 item.originalNewPrice && item.originalNewPrice > item.price
                   ? item.originalNewPrice - item.price
                   : 0;
-              const savingsPercent =
-                item.originalNewPrice && savings > 0
-                  ? Math.round((savings / item.originalNewPrice) * 100)
-                  : 0;
 
               return (
                 <div
                   key={item.id}
                   style={{
                     background: "#FFFFFF",
-                    borderRadius: "12px",
+                    borderRadius: "10px",
                     border: "1px solid #E2E8F0",
                     overflow: "hidden",
                     display: "flex",
                     flexDirection: "column",
                     justifyContent: "space-between",
-                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
+                    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.02)",
+                    transition: "border-color 0.15s ease",
                   }}
                 >
                   <div>
@@ -522,7 +475,7 @@ export default function UsedProductsPage() {
                       style={{
                         display: "block",
                         position: "relative",
-                        height: "215px",
+                        height: "190px",
                         background: "#F8F6F0",
                         padding: "16px",
                         borderBottom: "1px solid #F1F5F9",
@@ -533,17 +486,16 @@ export default function UsedProductsPage() {
                       <span
                         style={{
                           position: "absolute",
-                          top: "12px",
-                          left: "12px",
+                          top: "10px",
+                          left: "10px",
                           zIndex: 2,
                           background: gradeInfo.bg,
                           color: gradeInfo.text,
                           border: `1px solid ${gradeInfo.border}`,
-                          padding: "3px 8px",
+                          padding: "2px 7px",
                           borderRadius: "4px",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          letterSpacing: "0.02em",
+                          fontSize: "10.5px",
+                          fontWeight: 750,
                         }}
                       >
                         {gradeInfo.label}
@@ -553,82 +505,89 @@ export default function UsedProductsPage() {
                       <span
                         style={{
                           position: "absolute",
-                          top: "12px",
-                          right: "12px",
+                          top: "10px",
+                          right: "10px",
                           zIndex: 2,
                           background: "#0F172A",
                           color: "#FFFFFF",
-                          padding: "3px 8px",
+                          padding: "2px 7px",
                           borderRadius: "4px",
-                          fontSize: "10.5px",
+                          fontSize: "10px",
                           fontWeight: 650,
                           display: "inline-flex",
                           alignItems: "center",
-                          gap: "4px",
+                          gap: "3px",
                         }}
                       >
-                        <CheckCircle2 size={12} color="#10B981" />
-                        <span>Bench Tested</span>
+                        <CheckCircle2 size={11} color="#10B981" />
+                        <span>Tested</span>
                       </span>
 
                       {/* Image */}
                       <div style={{ position: "relative", width: "100%", height: "100%" }}>
-                        <Image
-                          src={imageSrc}
-                          alt={item.name}
-                          fill
-                          sizes="(max-width: 768px) 100vw, 400px"
-                          style={{ objectFit: "contain", objectPosition: "center" }}
-                        />
+                        {imageSrc.startsWith("http") ? (
+                          <img
+                            src={imageSrc}
+                            alt={item.name}
+                            style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center" }}
+                            loading="lazy"
+                          />
+                        ) : (
+                          <Image
+                            src={imageSrc}
+                            alt={item.name}
+                            fill
+                            sizes="(max-width: 768px) 100vw, 320px"
+                            style={{ objectFit: "contain", objectPosition: "center" }}
+                          />
+                        )}
                       </div>
                     </Link>
 
-                    {/* Card Body */}
-                    <div style={{ padding: "16px" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginBottom: "6px",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: "11.5px",
-                            fontWeight: 700,
-                            color: "#E86F1C",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.05em",
-                          }}
-                        >
-                          {item.brand} • {item.categoryName}
+                    {/* Clean Card Body (Minimal Text!) */}
+                    <div style={{ padding: "14px 14px 10px 14px" }}>
+                      {/* Metric Tag (Shutter or Optical) */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#E86F1C", textTransform: "uppercase" }}>
+                          {item.brand}
                         </span>
 
-                        {/* Dedicated Shutter Count / Flight Time / Optical Metric Badge */}
                         <span
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
-                            gap: "4px",
+                            gap: "3px",
                             background: "#F1F5F9",
-                            color: "#0F172A",
-                            padding: "2px 8px",
+                            color: "#334155",
+                            padding: "2px 6px",
                             borderRadius: "4px",
-                            fontSize: "11px",
-                            fontWeight: 700,
+                            fontSize: "10.5px",
+                            fontWeight: 650,
                           }}
                         >
                           {item.metricType === "SHUTTER" ? (
-                            <Camera size={12} color="#0F172A" />
+                            <Camera size={11} color="#64748B" />
                           ) : (
-                            <Compass size={12} color="#0F172A" />
+                            <Compass size={11} color="#64748B" />
                           )}
                           <span>{item.usageMetric}</span>
                         </span>
                       </div>
 
-                      <h3 style={{ margin: "0 0 6px 0", fontSize: "15.5px", fontWeight: 750, lineHeight: 1.35 }}>
+                      {/* Product Title (2-line clamp) */}
+                      <h3
+                        style={{
+                          margin: 0,
+                          fontSize: "14px",
+                          fontWeight: 700,
+                          lineHeight: "19px",
+                          height: "38px",
+                          overflow: "hidden",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                        }}
+                      >
                         <Link
                           href={`/used/${item.id}`}
                           style={{ color: "#0F172A", textDecoration: "none" }}
@@ -636,160 +595,90 @@ export default function UsedProductsPage() {
                           {item.name}
                         </Link>
                       </h3>
-
-                      <p
-                        style={{
-                          fontSize: "13px",
-                          color: "#64748B",
-                          lineHeight: 1.45,
-                          margin: "0 0 10px 0",
-                          display: "-webkit-box",
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: "vertical",
-                          overflow: "hidden",
-                        }}
-                      >
-                        {item.conditionDescription}
-                      </p>
-
-                      {/* Disclosed Marks / Highlights */}
-                      {item.knownDefects && item.knownDefects.length > 0 && (
-                        <div
-                          style={{
-                            background: "#FFFBEB",
-                            border: "1px solid #FEF3C7",
-                            borderRadius: "6px",
-                            padding: "6px 9px",
-                            fontSize: "11.5px",
-                            color: "#92400E",
-                            display: "flex",
-                            alignItems: "flex-start",
-                            gap: "5px",
-                            marginBottom: "10px",
-                          }}
-                        >
-                          <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: "2px" }} />
-                          <div>
-                            <strong>Disclosed:</strong> {item.knownDefects[0]}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Test Notes Snippet */}
-                      <div
-                        style={{
-                          fontSize: "11.5px",
-                          color: "#475569",
-                          background: "#F8FAFC",
-                          border: "1px solid #E2E8F0",
-                          borderRadius: "6px",
-                          padding: "6px 9px",
-                        }}
-                      >
-                        <span style={{ fontWeight: 650, color: "#0F172A" }}>Lab Report:</span>{" "}
-                        {item.testNotes}
-                      </div>
                     </div>
                   </div>
 
-                  {/* Card Footer: Price, Savings & Actions */}
+                  {/* Clean Footer: Price, Savings & Direct Actions */}
                   <div
                     style={{
-                      padding: "12px 16px",
+                      padding: "10px 14px",
                       background: "#FFFFFF",
                       borderTop: "1px solid #F1F5F9",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
-                      gap: "10px",
+                      gap: "8px",
                     }}
                   >
                     <div>
-                      {/* Price with Struck-Through Original New Price & Savings */}
-                      <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                        <span
-                          style={{
-                            fontSize: "18px",
-                            fontWeight: 800,
-                            color: "#0F172A",
-                            letterSpacing: "-0.015em",
-                          }}
-                        >
-                          Rs. {item.price.toLocaleString("en-IN")}
-                        </span>
-
-                        {item.originalNewPrice && (
-                          <span
-                            style={{
-                              fontSize: "11.5px",
-                              color: "#94A3B8",
-                              textDecoration: "line-through",
-                            }}
-                          >
-                            Rs. {item.originalNewPrice.toLocaleString("en-IN")}
-                          </span>
-                        )}
+                      <div
+                        style={{
+                          fontSize: "15.5px",
+                          fontWeight: 800,
+                          color: "#0F172A",
+                          lineHeight: 1.1,
+                        }}
+                      >
+                        Rs. {item.price.toLocaleString("en-IN")}
                       </div>
 
                       {savings > 0 && (
                         <div
                           style={{
-                            fontSize: "10.5px",
+                            fontSize: "10px",
                             fontWeight: 700,
                             color: "#15803D",
                             marginTop: "2px",
                           }}
                         >
-                          Save Rs. {savings.toLocaleString("en-IN")} ({savingsPercent}% Off New)
+                          Save Rs. {savings.toLocaleString("en-IN")}
                         </div>
                       )}
                     </div>
 
-                    <div style={{ display: "flex", gap: "8px" }}>
+                    <div style={{ display: "flex", gap: "6px" }}>
                       <Link
                         href={`/used/${item.id}`}
                         style={{
-                          padding: "8px 11px",
-                          borderRadius: "6px",
+                          padding: "6px 10px",
+                          borderRadius: "5px",
                           border: "1px solid #CBD5E1",
                           color: "#334155",
-                          fontSize: "12px",
+                          fontSize: "11.5px",
                           fontWeight: 650,
                           textDecoration: "none",
                           display: "inline-flex",
                           alignItems: "center",
-                          gap: "4px",
                         }}
                       >
-                        <span>Inspection</span>
-                        <ArrowRight size={13} />
+                        Inspect
                       </Link>
 
                       <button
                         type="button"
                         onClick={(e) => handleAddToCart(item, e)}
                         style={{
-                          padding: "8px 13px",
-                          borderRadius: "6px",
+                          padding: "6px 11px",
+                          borderRadius: "5px",
                           background: isAdded ? "#16A34A" : "#E86F1C",
                           color: "#FFFFFF",
                           border: "none",
-                          fontSize: "12px",
+                          fontSize: "11.5px",
                           fontWeight: 700,
                           cursor: "pointer",
                           display: "inline-flex",
                           alignItems: "center",
-                          gap: "5px",
+                          gap: "4px",
                           transition: "background 0.15s ease",
                         }}
                       >
                         {isAdded ? (
                           <>
-                            <Check size={14} /> Added
+                            <Check size={13} /> Added
                           </>
                         ) : (
                           <>
-                            <ShoppingCart size={14} /> Buy Unit
+                            <ShoppingCart size={13} /> Buy
                           </>
                         )}
                       </button>
@@ -801,144 +690,45 @@ export default function UsedProductsPage() {
           </div>
         )}
 
-        {/* 4-Pillar Certification Guarantee Strip */}
+        {/* Clean, Minimalist Trust Strip */}
         <div
           style={{
-            marginTop: "3.5rem",
+            marginTop: "3rem",
             background: "#FFFFFF",
             border: "1px solid #E2E8F0",
-            borderRadius: "12px",
-            padding: "1.5rem",
+            borderRadius: "8px",
+            padding: "1rem 1.25rem",
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: "16px",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: "14px",
           }}
         >
-          <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
-            <ClipboardCheck size={22} color="#E86F1C" style={{ flexShrink: 0, marginTop: "2px" }} />
-            <div>
-              <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0F172A" }}>
-                45-Point Bench Inspection
-              </div>
-              <div style={{ fontSize: "12px", color: "#64748B", marginTop: "2px" }}>
-                Sensors, shutter curtains, AF accuracy, and optical elements tested under microscope.
-              </div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <ClipboardCheck size={18} color="#E86F1C" style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: "12px", color: "#334155", fontWeight: 600 }}>
+              45-Point Bench Test
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
-            <AlertTriangle size={22} color="#E86F1C" style={{ flexShrink: 0, marginTop: "2px" }} />
-            <div>
-              <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0F172A" }}>
-                100% Defect Transparency
-              </div>
-              <div style={{ fontSize: "12px", color: "#64748B", marginTop: "2px" }}>
-                Every cosmetic flaw, paint wear, and exact shutter actuation is fully disclosed.
-              </div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <ShieldCheck size={18} color="#E86F1C" style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: "12px", color: "#334155", fontWeight: 600 }}>
+              90–180 Days Lab Warranty
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
-            <ShieldCheck size={22} color="#E86F1C" style={{ flexShrink: 0, marginTop: "2px" }} />
-            <div>
-              <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0F172A" }}>
-                90 to 180 Days Lab Warranty
-              </div>
-              <div style={{ fontSize: "12px", color: "#64748B", marginTop: "2px" }}>
-                Comprehensive workshop warranty covering parts and labor backed by Sharma Video Care.
-              </div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <RotateCcw size={18} color="#E86F1C" style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: "12px", color: "#334155", fontWeight: 600 }}>
+              7-Day Inspection Return
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
-            <RotateCcw size={22} color="#E86F1C" style={{ flexShrink: 0, marginTop: "2px" }} />
-            <div>
-              <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0F172A" }}>
-                7-Day Inspection Return
-              </div>
-              <div style={{ fontSize: "12px", color: "#64748B", marginTop: "2px" }}>
-                Full refund or replacement if item differs from our written lab inspection report.
-              </div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <PhoneCall size={18} color="#E86F1C" style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: "12px", color: "#334155", fontWeight: 600 }}>
+              Janakpur Workshop Support
             </div>
-          </div>
-        </div>
-
-        {/* Sell / Trade-In Callout Card */}
-        <div
-          style={{
-            marginTop: "1.5rem",
-            background: "#0F172A",
-            borderRadius: "12px",
-            padding: "2rem",
-            color: "#FFFFFF",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "1.5rem",
-          }}
-        >
-          <div>
-            <span
-              style={{
-                fontSize: "11.5px",
-                fontWeight: 750,
-                color: "#E86F1C",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                display: "block",
-                marginBottom: "4px",
-              }}
-            >
-              Sell or Trade-In Your Equipment
-            </span>
-            <h3 style={{ fontSize: "1.35rem", fontWeight: 800, color: "#FFFFFF", margin: "0 0 0.35rem 0" }}>
-              Upgrading your camera setup? Trade in with Sharma Video Care
-            </h3>
-            <p style={{ fontSize: "13.5px", color: "#94A3B8", margin: 0, maxWidth: "660px" }}>
-              Bring or courier your camera, lens, or drone to our Janakpur workshop for an immediate bench
-              evaluation. Receive instant cash payout or store credit toward any new or certified pre-owned equipment.
-            </p>
-          </div>
-
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <Link
-              href="/contact"
-              style={{
-                background: "#E86F1C",
-                color: "#FFFFFF",
-                textDecoration: "none",
-                padding: "10px 18px",
-                borderRadius: "6px",
-                fontSize: "13px",
-                fontWeight: 700,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              <span>Request Trade-In Evaluation</span>
-              <ArrowRight size={14} />
-            </Link>
-            <a
-              href="tel:+9779854025000"
-              style={{
-                background: "#1E293B",
-                color: "#FFFFFF",
-                textDecoration: "none",
-                padding: "10px 16px",
-                borderRadius: "6px",
-                fontSize: "13px",
-                fontWeight: 600,
-                border: "1px solid #334155",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              <PhoneCall size={14} color="#E86F1C" />
-              <span>+977-9854025000</span>
-            </a>
           </div>
         </div>
       </div>

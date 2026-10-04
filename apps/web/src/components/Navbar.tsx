@@ -26,6 +26,7 @@ import {
   Bell,
   Headphones,
 } from "lucide-react";
+import { SHOP_PRODUCTS } from "@/data/shopProducts";
 
 export const Navbar: React.FC = () => {
   const router = useRouter();
@@ -34,27 +35,47 @@ export const Navbar: React.FC = () => {
   const { totalCount } = useCart();
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const profileRef = useRef<HTMLDivElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  // Close menus on outside click
+  // Suggestions for autocomplete
+  const suggestions = React.useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q || q.length < 2) return [];
+    return SHOP_PRODUCTS.filter((p) => {
+      return (
+        p.title.toLowerCase().includes(q) ||
+        (p.brand && p.brand.toLowerCase().includes(q)) ||
+        (p.category && p.category.toLowerCase().includes(q)) ||
+        (p.model && p.model.toLowerCase().includes(q))
+      );
+    }).slice(0, 5);
+  }, [searchQuery]);
+
+  // Close menus and search dropdown on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       const target = event.target as Node;
       if (profileRef.current && !profileRef.current.contains(target)) {
         setProfileOpen(false);
       }
+      if (searchContainerRef.current && !searchContainerRef.current.contains(target)) {
+        setSearchFocused(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Close menus on route change
+  // Close menus and search on route change
   useEffect(() => {
     setProfileOpen(false);
     setMobileMenuOpen(false);
+    setSearchFocused(false);
   }, [pathname]);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -62,6 +83,7 @@ export const Navbar: React.FC = () => {
     if (searchQuery.trim()) {
       router.push(`/shop?q=${encodeURIComponent(searchQuery.trim())}`);
       setMobileMenuOpen(false);
+      setSearchFocused(false);
     }
   };
 
@@ -118,8 +140,8 @@ export const Navbar: React.FC = () => {
           </Link>
 
           {/* Center: Open Prominent Search Bar (Desktop) */}
-          <form
-            onSubmit={handleSearch}
+          <div
+            ref={searchContainerRef}
             className="nav-desktop-only"
             style={{
               flex: 1,
@@ -127,46 +149,221 @@ export const Navbar: React.FC = () => {
               position: "relative",
             }}
           >
-            <Search
-              size={16}
-              strokeWidth={1.8}
-              style={{
-                position: "absolute",
-                left: "14px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                color: "#9A9389",
-                pointerEvents: "none",
-              }}
-            />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search products, repairs, certified equipment..."
-              style={{
-                width: "100%",
-                padding: "0.55rem 1rem 0.55rem 2.45rem",
-                background: "#F7F5F0",
-                border: "1px solid #E6E1D8",
-                borderRadius: "9999px",
-                fontSize: "0.88rem",
-                color: "#1A1A1A",
-                outline: "none",
-                transition: "all 0.15s ease",
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = "#E86F1C";
-                e.currentTarget.style.background = "#FFFFFF";
-                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(232, 111, 28, 0.1)";
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = "#E6E1D8";
-                e.currentTarget.style.background = "#F7F5F0";
-                e.currentTarget.style.boxShadow = "none";
-              }}
-            />
-          </form>
+            <form onSubmit={handleSearch} style={{ position: "relative", width: "100%" }}>
+              <Search
+                size={16}
+                strokeWidth={1.8}
+                style={{
+                  position: "absolute",
+                  left: "14px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "#9A9389",
+                  pointerEvents: "none",
+                }}
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setSearchFocused(true);
+                }}
+                onFocus={(e) => {
+                  setSearchFocused(true);
+                  e.currentTarget.style.borderColor = "#E86F1C";
+                  e.currentTarget.style.background = "#FFFFFF";
+                  e.currentTarget.style.boxShadow = "0 0 0 3px rgba(232, 111, 28, 0.1)";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "#E6E1D8";
+                  e.currentTarget.style.background = "#F7F5F0";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+                placeholder="Search cameras, lenses, drones, repairs..."
+                style={{
+                  width: "100%",
+                  padding: "0.55rem 2.2rem 0.55rem 2.45rem",
+                  background: "#F7F5F0",
+                  border: "1px solid #E6E1D8",
+                  borderRadius: "9999px",
+                  fontSize: "0.88rem",
+                  color: "#1A1A1A",
+                  outline: "none",
+                  transition: "all 0.15s ease",
+                }}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Clear query"
+                  style={{
+                    position: "absolute",
+                    right: "12px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "2px",
+                    color: "#9CA3AF",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <X size={15} />
+                </button>
+              )}
+            </form>
+
+            {/* Suggestions Popover */}
+            {searchFocused && searchQuery.trim().length >= 2 && suggestions.length > 0 && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 8px)",
+                  left: 0,
+                  right: 0,
+                  background: "#FFFFFF",
+                  border: "1px solid #E2E8F0",
+                  borderRadius: "12px",
+                  boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
+                  zIndex: 300,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "8px 14px",
+                    background: "#F8FAFC",
+                    borderBottom: "1px solid #F1F5F9",
+                    fontSize: "11.5px",
+                    fontWeight: 700,
+                    color: "#64748B",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span>Product Suggestions</span>
+                  <span>Press Enter to search all</span>
+                </div>
+
+                <div style={{ maxHeight: "320px", overflowY: "auto" }}>
+                  {suggestions.map((item) => (
+                    <Link
+                      key={item.id}
+                      href={`/shop/${item.id}`}
+                      onClick={() => setSearchFocused(false)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        padding: "10px 14px",
+                        borderBottom: "1px solid #F8FAFC",
+                        textDecoration: "none",
+                        transition: "background 0.12s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "#F8FAFC")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      {/* Image Thumbnail */}
+                      <div
+                        style={{
+                          width: "40px",
+                          height: "40px",
+                          borderRadius: "6px",
+                          background: "#F1F5F9",
+                          overflow: "hidden",
+                          flexShrink: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.title}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                        ) : (
+                          <ShoppingBag size={18} color="#94A3B8" />
+                        )}
+                      </div>
+
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: "13px",
+                            fontWeight: 650,
+                            color: "#0F172A",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {item.title}
+                        </div>
+                        <div style={{ fontSize: "11.5px", color: "#64748B", display: "flex", gap: "6px" }}>
+                          <span>{item.brand}</span>
+                          <span>•</span>
+                          <span>{item.category}</span>
+                        </div>
+                      </div>
+
+                      {/* Price */}
+                      <div
+                        style={{
+                          fontSize: "13px",
+                          fontWeight: 700,
+                          color: "#E86F1C",
+                          flexShrink: 0,
+                        }}
+                      >
+                        NPR {item.price.toLocaleString("en-IN")}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+
+                {/* Bottom View All Link */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    router.push(`/shop?q=${encodeURIComponent(searchQuery.trim())}`);
+                    setSearchFocused(false);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    background: "#FAFAFA",
+                    border: "none",
+                    borderTop: "1px solid #E2E8F0",
+                    fontSize: "12.5px",
+                    fontWeight: 650,
+                    color: "#0F172A",
+                    textAlign: "center",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#F1F5F9")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "#FAFAFA")}
+                >
+                  <span>View all results for &ldquo;{searchQuery.trim()}&rdquo;</span>
+                  <ArrowRight size={14} color="#E86F1C" />
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Right Area: Logged-in Bell/Chat + Cart + Account + Get Help Button */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
@@ -690,10 +887,10 @@ export const Navbar: React.FC = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search products, repairs, certified equipment..."
+              placeholder="Search cameras, lenses, drones..."
               style={{
                 width: "100%",
-                padding: "0.65rem 1rem 0.65rem 2.4rem",
+                padding: "0.65rem 2.2rem 0.65rem 2.4rem",
                 background: "#F7F5F0",
                 border: "1px solid #E6E1D8",
                 borderRadius: "8px",
@@ -702,6 +899,27 @@ export const Navbar: React.FC = () => {
                 outline: "none",
               }}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear query"
+                style={{
+                  position: "absolute",
+                  right: "10px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "4px",
+                  color: "#9CA3AF",
+                  display: "flex",
+                }}
+              >
+                <X size={16} />
+              </button>
+            )}
           </form>
 
           {/* Navigation Links Mobile */}

@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, Suspense } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { useCart } from "../../context/CartContext";
@@ -25,12 +26,18 @@ import {
   Check,
   ChevronDown,
   RotateCcw as ResetIcon,
+  Sparkles,
 } from "lucide-react";
 
-export default function ShopPage() {
+function ShopContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlQuery = searchParams.get("q") || "";
+  const urlCat = searchParams.get("category") || "";
+
   const [products, setProducts] = useState<ShopProduct[]>(SHOP_PRODUCTS);
-  const [search, setSearch] = useState("");
-  const [selectedCat, setSelectedCat] = useState<string>("All");
+  const [search, setSearch] = useState(urlQuery);
+  const [selectedCat, setSelectedCat] = useState<string>(urlCat || "All");
   const [selectedBrand, setSelectedBrand] = useState<string>("All Brands");
   const [selectedPriceBracket, setSelectedPriceBracket] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"FEATURED" | "PRICE_ASC" | "PRICE_DESC" | "RATING">("FEATURED");
@@ -39,6 +46,19 @@ export default function ShopPage() {
   const [addedId, setAddedId] = useState<string | null>(null);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
+  // Sync state if URL query changes
+  useEffect(() => {
+    if (urlQuery !== undefined) {
+      setSearch(urlQuery);
+    }
+  }, [urlQuery]);
+
+  useEffect(() => {
+    if (urlCat) {
+      setSelectedCat(urlCat);
+    }
+  }, [urlCat]);
 
   // Cart toast
   const [cartToast, setCartToast] = useState<{ name: string; visible: boolean }>({
@@ -197,6 +217,9 @@ export default function ShopPage() {
     setSelectedPriceBracket("all");
     setSortBy("FEATURED");
     setOnlyInStock(false);
+    if (urlQuery || urlCat) {
+      router.push("/shop");
+    }
   };
 
   const activeFiltersCount =
@@ -229,7 +252,7 @@ export default function ShopPage() {
               padding: 0,
             }}
           >
-            Reset All ({activeFiltersCount})
+            Reset All
           </button>
         )}
       </div>
@@ -242,7 +265,6 @@ export default function ShopPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
           {SHOP_CATEGORIES.map((cat) => {
             const isSelected = selectedCat === cat;
-            const count = categoryCounts[cat] || 0;
             return (
               <button
                 key={cat}
@@ -265,9 +287,6 @@ export default function ShopPage() {
                 }}
               >
                 <span>{cat}</span>
-                <span style={{ fontSize: "11px", opacity: isSelected ? 0.8 : 0.5 }}>
-                  {count}
-                </span>
               </button>
             );
           })}
@@ -282,7 +301,6 @@ export default function ShopPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
           {SHOP_BRANDS.map((brand) => {
             const isSelected = selectedBrand === brand;
-            const count = brandCounts[brand] || 0;
             return (
               <button
                 key={brand}
@@ -304,9 +322,6 @@ export default function ShopPage() {
                 }}
               >
                 <span>{brand}</span>
-                <span style={{ fontSize: "11px", color: isSelected ? "#E86F1C" : "#94A3B8" }}>
-                  {count}
-                </span>
               </button>
             );
           })}
@@ -423,24 +438,23 @@ export default function ShopPage() {
             </p>
           </div>
 
-          <Link
-            href="/source-request"
+          <div
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "6px",
-              background: "#0F172A",
-              color: "#FFFFFF",
+              gap: "8px",
+              background: "#F8FAFC",
+              border: "1px solid #E2E8F0",
+              color: "#0F172A",
               padding: "8px 14px",
-              borderRadius: "6px",
+              borderRadius: "8px",
               fontSize: "12.5px",
-              fontWeight: 600,
-              textDecoration: "none",
+              fontWeight: 650,
             }}
           >
-            <span>Need Custom Sourcing?</span>
-            <ArrowRight size={14} />
-          </Link>
+            <ShieldCheck size={16} color="#16A34A" />
+            <span>100% Genuine • Official Warranty</span>
+          </div>
         </div>
       </header>
 
@@ -541,12 +555,8 @@ export default function ShopPage() {
                 )}
               </div>
 
-              {/* Right Controls: Count + Sort + Mobile Button */}
+              {/* Right Controls: Sort + Mobile Button */}
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ fontSize: "13px", color: "#64748B", whiteSpace: "nowrap" }}>
-                  <strong style={{ color: "#0F172A" }}>{sorted.length}</strong> items
-                </span>
-
                 {/* Sort Dropdown */}
                 <select
                   value={sortBy}
@@ -597,6 +607,58 @@ export default function ShopPage() {
               </div>
             </div>
 
+            {/* Active Search Results Banner if query is active */}
+            {search.trim() && (
+              <div
+                style={{
+                  background: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                  borderRadius: "8px",
+                  padding: "12px 16px",
+                  marginBottom: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: "#0F172A" }}>
+                    Search results for &ldquo;{search.trim()}&rdquo;
+                  </span>
+                  <span style={{ fontSize: "13px", color: "#64748B", marginLeft: "8px" }}>
+                    ({sorted.length} {sorted.length === 1 ? "product found" : "products found"})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch("");
+                    if (urlQuery) {
+                      router.push("/shop");
+                    }
+                  }}
+                  style={{
+                    background: "#FFFFFF",
+                    border: "1px solid #CBD5E1",
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    color: "#0F172A",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                  }}
+                >
+                  <X size={13} />
+                  <span>Clear Search</span>
+                </button>
+              </div>
+            )}
+
             {/* Active Filter Tags (Clean single row) */}
             {activeFiltersCount > 0 && (
               <div
@@ -610,6 +672,33 @@ export default function ShopPage() {
                 }}
               >
                 <span style={{ color: "#64748B", fontWeight: 600 }}>Active:</span>
+
+                {search.trim() && (
+                  <span
+                    style={{
+                      background: "#EEF2FF",
+                      border: "1px solid #C7D2FE",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      color: "#3730A3",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    Query: &ldquo;{search.trim()}&rdquo;
+                    <button
+                      onClick={() => {
+                        setSearch("");
+                        if (urlQuery) router.push("/shop");
+                      }}
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: "#3730A3" }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
 
                 {selectedCat !== "All" && (
                   <span
@@ -750,11 +839,28 @@ export default function ShopPage() {
                   border: "1px solid #E2E8F0",
                 }}
               >
+                <div
+                  style={{
+                    width: "48px",
+                    height: "48px",
+                    borderRadius: "50%",
+                    background: "#F1F5F9",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    margin: "0 auto 1rem auto",
+                    color: "#64748B",
+                  }}
+                >
+                  <Search size={22} />
+                </div>
                 <h3 style={{ fontSize: "1.15rem", fontWeight: 700, color: "#0F172A", margin: "0 0 0.5rem 0" }}>
-                  No matching products
+                  {search.trim() ? `No products found for "${search.trim()}"` : "No matching products"}
                 </h3>
                 <p style={{ color: "#64748B", fontSize: "13.5px", margin: "0 auto 1.25rem auto", maxWidth: "420px" }}>
-                  We couldn't find any items matching your selected criteria. Try resetting your filters.
+                  {search.trim()
+                    ? "Check your spelling or try searching with more general terms like camera, lens, tripod, or audio."
+                    : "We couldn't find any items matching your selected criteria. Try resetting your filters."}
                 </p>
                 <button
                   type="button"
@@ -1003,7 +1109,7 @@ export default function ShopPage() {
                 cursor: "pointer",
               }}
             >
-              Show {sorted.length} Products
+              Apply Filters
             </button>
           </div>
         </div>
@@ -1108,5 +1214,19 @@ export default function ShopPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ShopPage() {
+  return (
+    <Suspense
+      fallback={
+        <div style={{ minHeight: "60vh", padding: "60px", textAlign: "center", color: "#64748B" }}>
+          Loading store...
+        </div>
+      }
+    >
+      <ShopContent />
+    </Suspense>
   );
 }
