@@ -20,6 +20,7 @@ export interface ProductCardData {
   availabilityType?: "IN_STOCK" | "SOURCE_ON_REQUEST" | "SPECIAL_ORDER" | "OUT_OF_STOCK";
   warrantyInfo?: string;
   description?: string;
+  tag?: string;
 }
 
 export interface ProductCardProps {
@@ -94,14 +95,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       onMouseEnter={() => setIsCardHovered(true)}
       onMouseLeave={() => setIsCardHovered(false)}
     >
-      {/* Studio Photo Canvas with Warm Lighting */}
+      {/* Studio Photo Canvas with Solid Neutral Background */}
       <Link
         href={productHref}
         style={{
           display: "block",
           position: "relative",
           height: "205px",
-          background: "linear-gradient(180deg, #FBF8F3 0%, #F5EFE6 100%)",
+          background: "#F8F6F0",
           padding: "18px",
           textDecoration: "none",
           borderBottom: "1px solid #EFE8DE",
@@ -109,7 +110,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           flexShrink: 0,
         }}
       >
-        {/* Deal / Sale Chip (Clean label, NO percentage) */}
+        {/* Deal / Sale Chip */}
         {hasDiscount && (
           <span
             style={{
@@ -129,6 +130,27 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             }}
           >
             SALE
+          </span>
+        )}
+
+        {/* High-Ticket Trust Tag (e.g. MDMS Cleared, Authorized Stock, Lab Certified) */}
+        {product.tag && (
+          <span
+            style={{
+              position: "absolute",
+              bottom: "10px",
+              left: "12px",
+              zIndex: 2,
+              padding: "2px 7px",
+              borderRadius: "4px",
+              background: "#0F172A",
+              color: "#FFFFFF",
+              fontSize: "10px",
+              fontWeight: 650,
+              letterSpacing: "0.02em",
+            }}
+          >
+            {product.tag}
           </span>
         )}
 

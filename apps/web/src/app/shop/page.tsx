@@ -6,7 +6,13 @@ import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { useCart } from "../../context/CartContext";
 import { ProductCard } from "@/components/ProductCard";
-import { SHOP_PRODUCTS, SHOP_CATEGORIES, SHOP_BRANDS, ShopProduct } from "@/data/shopProducts";
+import {
+  SHOP_PRODUCTS,
+  SHOP_CATEGORIES,
+  SHOP_BRANDS,
+  SHOP_PRICE_BRACKETS,
+  ShopProduct,
+} from "@/data/shopProducts";
 import {
   Search,
   SlidersHorizontal,
@@ -16,7 +22,9 @@ import {
   RotateCcw,
   Headphones,
   ArrowRight,
-  Sparkles,
+  Check,
+  ChevronDown,
+  RotateCcw as ResetIcon,
 } from "lucide-react";
 
 export default function ShopPage() {
@@ -24,15 +32,22 @@ export default function ShopPage() {
   const [search, setSearch] = useState("");
   const [selectedCat, setSelectedCat] = useState<string>("All");
   const [selectedBrand, setSelectedBrand] = useState<string>("All Brands");
+  const [selectedPriceBracket, setSelectedPriceBracket] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"FEATURED" | "PRICE_ASC" | "PRICE_DESC" | "RATING">("FEATURED");
   const [onlyInStock, setOnlyInStock] = useState(false);
   const [loading, setLoading] = useState(false);
   const [addedId, setAddedId] = useState<string | null>(null);
   const [wishlist, setWishlist] = useState<string[]>([]);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
+  // Cart toast
+  const [cartToast, setCartToast] = useState<{ name: string; visible: boolean }>({
+    name: "",
+    visible: false,
+  });
 
   const { addToCart } = useCart();
 
-  // Load Firestore products and merge with curated verified catalog
   useEffect(() => {
     async function loadProducts() {
       try {
@@ -46,6 +61,7 @@ export default function ShopPage() {
               title: data.name || data.title || "Product",
               subtitle: data.subtitle || data.description || "",
               trustNote: data.trustNote || "Official Nepal Warranty • Insured Delivery",
+              tag: data.tag || (data.brand ? `Official ${data.brand}` : "Verified Genuine"),
               category: data.categoryName || data.category || "Cameras",
               brand: data.brand || "Brand",
               model: data.model || "",
@@ -65,7 +81,6 @@ export default function ShopPage() {
             });
           });
 
-          // Merge without duplicate IDs
           const liveIds = new Set(liveList.map((p) => p.id));
           const combined = [...liveList, ...SHOP_PRODUCTS.filter((p) => !liveIds.has(p.id))];
           setProducts(combined);
@@ -82,7 +97,7 @@ export default function ShopPage() {
     loadProducts();
   }, []);
 
-  // Category counts
+  // Counts
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { All: products.length };
     products.forEach((p) => {
@@ -92,9 +107,20 @@ export default function ShopPage() {
     return counts;
   }, [products]);
 
+  const brandCounts = useMemo(() => {
+    const counts: Record<string, number> = { "All Brands": products.length };
+    products.forEach((p) => {
+      const b = p.brand || "Other";
+      counts[b] = (counts[b] || 0) + 1;
+    });
+    return counts;
+  }, [products]);
+
   // Filtering
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
+    const bracket = SHOP_PRICE_BRACKETS.find((b) => b.id === selectedPriceBracket);
+
     return products.filter((p) => {
       const matchesSearch =
         !q ||
@@ -114,9 +140,14 @@ export default function ShopPage() {
 
       const matchesStock = !onlyInStock || p.availabilityType === "IN_STOCK";
 
-      return matchesSearch && matchesCat && matchesBrand && matchesStock;
+      let matchesPrice = true;
+      if (bracket && bracket.id !== "all") {
+        matchesPrice = p.price >= bracket.min && p.price < bracket.max;
+      }
+
+      return matchesSearch && matchesCat && matchesBrand && matchesStock && matchesPrice;
     });
-  }, [products, search, selectedCat, selectedBrand, onlyInStock]);
+  }, [products, search, selectedCat, selectedBrand, onlyInStock, selectedPriceBracket]);
 
   // Sorting
   const sorted = useMemo(() => {
@@ -144,7 +175,9 @@ export default function ShopPage() {
       warrantySummary: p.warrantyInfo || p.trustNote,
     });
     setAddedId(p.id);
+    setCartToast({ name: p.title, visible: true });
     setTimeout(() => setAddedId(null), 1800);
+    setTimeout(() => setCartToast((prev) => ({ ...prev, visible: false })), 4000);
   };
 
   const handleToggleWishlist = (id: string, e?: React.MouseEvent) => {
@@ -161,261 +194,52 @@ export default function ShopPage() {
     setSearch("");
     setSelectedCat("All");
     setSelectedBrand("All Brands");
+    setSelectedPriceBracket("all");
     setSortBy("FEATURED");
     setOnlyInStock(false);
   };
 
-  const hasActiveFilters =
-    search.trim() !== "" ||
-    selectedCat !== "All" ||
-    selectedBrand !== "All Brands" ||
-    onlyInStock ||
-    sortBy !== "FEATURED";
+  const activeFiltersCount =
+    (search.trim() ? 1 : 0) +
+    (selectedCat !== "All" ? 1 : 0) +
+    (selectedBrand !== "All Brands" ? 1 : 0) +
+    (selectedPriceBracket !== "all" ? 1 : 0) +
+    (onlyInStock ? 1 : 0) +
+    (sortBy !== "FEATURED" ? 1 : 0);
 
-  return (
-    <div style={{ background: "#F8FAFC", minHeight: "100vh" }}>
-      {/* Top Banner / Store Header */}
-      <section
-        style={{
-          background: "#FFFFFF",
-          borderBottom: "1px solid #E2E8F0",
-          padding: "2.5rem 1.25rem 2rem 1.25rem",
-        }}
-      >
-        <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
-          {/* Breadcrumb */}
-          <div
+  // Common Filter Sidebar Component
+  const FilterSidebar = () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      {/* Active Filter Header Indicator */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: "14px", fontWeight: 750, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Filters
+        </span>
+        {activeFiltersCount > 0 && (
+          <button
+            type="button"
+            onClick={clearAllFilters}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "13px",
-              color: "#64748B",
-              marginBottom: "12px",
+              background: "none",
+              border: "none",
+              color: "#E86F1C",
+              fontSize: "12px",
+              fontWeight: 650,
+              cursor: "pointer",
+              padding: 0,
             }}
           >
-            <Link href="/" style={{ color: "#64748B", textDecoration: "none" }}>
-              Home
-            </Link>
-            <span>/</span>
-            <span style={{ color: "#0F172A", fontWeight: 600 }}>Store & Catalogue</span>
-          </div>
+            Reset All ({activeFiltersCount})
+          </button>
+        )}
+      </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-end",
-              flexWrap: "wrap",
-              gap: "1.5rem",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  background: "#FFF7ED",
-                  color: "#E86F1C",
-                  border: "1px solid #FFEDD5",
-                  padding: "4px 10px",
-                  borderRadius: "6px",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
-                  marginBottom: "0.75rem",
-                }}
-              >
-                <Sparkles size={14} /> Official Nepal Store
-              </div>
-
-              <h1
-                style={{
-                  fontSize: "2.25rem",
-                  fontWeight: 800,
-                  color: "#0F172A",
-                  letterSpacing: "-0.025em",
-                  margin: "0 0 0.5rem 0",
-                  lineHeight: 1.2,
-                }}
-              >
-                Electronics & Equipment Store
-              </h1>
-              <p
-                style={{
-                  fontSize: "1rem",
-                  color: "#475569",
-                  margin: 0,
-                  maxWidth: "760px",
-                  lineHeight: 1.5,
-                }}
-              >
-                Direct distributor & verified laboratory-certified electronics. Every camera, lens,
-                drone, and surveillance system includes genuine manufacturer warranty and insured
-                nationwide delivery.
-              </p>
-            </div>
-
-            <Link
-              href="/source-request"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                background: "#0F172A",
-                color: "#FFFFFF",
-                padding: "10px 18px",
-                borderRadius: "8px",
-                fontSize: "13px",
-                fontWeight: 650,
-                textDecoration: "none",
-                border: "1px solid #0F172A",
-                transition: "background 0.15s ease",
-              }}
-            >
-              <span>Can't find a model? Request Sourcing</span>
-              <ArrowRight size={15} />
-            </Link>
-          </div>
-
-          {/* Trust Value Strip */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: "12px",
-              marginTop: "2rem",
-              paddingTop: "1.5rem",
-              borderTop: "1px solid #F1F5F9",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <div
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "8px",
-                  background: "#F8FAFC",
-                  border: "1px solid #E2E8F0",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#E86F1C",
-                  flexShrink: 0,
-                }}
-              >
-                <ShieldCheck size={20} />
-              </div>
-              <div>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>
-                  100% Genuine Products
-                </div>
-                <div style={{ fontSize: "11px", color: "#64748B" }}>
-                  Official brand warranties with VAT bill
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <div
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "8px",
-                  background: "#F8FAFC",
-                  border: "1px solid #E2E8F0",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#E86F1C",
-                  flexShrink: 0,
-                }}
-              >
-                <Truck size={20} />
-              </div>
-              <div>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>
-                  Insured Nepal Courier
-                </div>
-                <div style={{ fontSize: "11px", color: "#64748B" }}>
-                  Free Janakpur pickup & tracked transit
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <div
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "8px",
-                  background: "#F8FAFC",
-                  border: "1px solid #E2E8F0",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#E86F1C",
-                  flexShrink: 0,
-                }}
-              >
-                <RotateCcw size={20} />
-              </div>
-              <div>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>
-                  7-Day Replacement
-                </div>
-                <div style={{ fontSize: "11px", color: "#64748B" }}>
-                  Guaranteed replacement for defects
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <div
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "8px",
-                  background: "#F8FAFC",
-                  border: "1px solid #E2E8F0",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#E86F1C",
-                  flexShrink: 0,
-                }}
-              >
-                <Headphones size={20} />
-              </div>
-              <div>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>
-                  Technician Lab Support
-                </div>
-                <div style={{ fontSize: "11px", color: "#64748B" }}>
-                  Janakpur workshop service backup
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* Category Section */}
+      <div>
+        <div style={{ fontSize: "12px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>
+          Category
         </div>
-      </section>
-
-      {/* Main Content Area */}
-      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "2rem 1.25rem 4rem 1.25rem" }}>
-        {/* Horizontal Category Filter Pills */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            overflowX: "auto",
-            paddingBottom: "8px",
-            marginBottom: "1.5rem",
-            scrollbarWidth: "none",
-          }}
-        >
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
           {SHOP_CATEGORIES.map((cat) => {
             const isSelected = selectedCat === cat;
             const count = categoryCounts[cat] || 0;
@@ -425,572 +249,864 @@ export default function ShopPage() {
                 type="button"
                 onClick={() => setSelectedCat(cat)}
                 style={{
-                  display: "inline-flex",
+                  display: "flex",
                   alignItems: "center",
-                  gap: "6px",
-                  padding: "8px 16px",
-                  borderRadius: "8px",
-                  fontSize: "13.5px",
-                  fontWeight: isSelected ? 700 : 550,
+                  justifyContent: "space-between",
+                  padding: "7px 10px",
+                  borderRadius: "6px",
+                  border: "none",
+                  background: isSelected ? "#0F172A" : "transparent",
                   color: isSelected ? "#FFFFFF" : "#334155",
-                  background: isSelected ? "#E86F1C" : "#FFFFFF",
-                  border: isSelected ? "1px solid #E86F1C" : "1px solid #E2E8F0",
+                  fontSize: "13px",
+                  fontWeight: isSelected ? 700 : 500,
                   cursor: "pointer",
-                  whiteSpace: "nowrap",
-                  transition: "all 0.15s ease",
-                  boxShadow: isSelected
-                    ? "0 2px 6px rgba(232, 111, 28, 0.25)"
-                    : "0 1px 2px rgba(0, 0, 0, 0.03)",
+                  textAlign: "left",
+                  transition: "background 0.12s ease",
                 }}
               >
                 <span>{cat}</span>
-                {count > 0 && (
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      padding: "1px 6px",
-                      borderRadius: "10px",
-                      background: isSelected ? "rgba(255, 255, 255, 0.25)" : "#F1F5F9",
-                      color: isSelected ? "#FFFFFF" : "#64748B",
-                      fontWeight: 650,
-                    }}
-                  >
-                    {count}
-                  </span>
-                )}
+                <span style={{ fontSize: "11px", opacity: isSelected ? 0.8 : 0.5 }}>
+                  {count}
+                </span>
               </button>
             );
           })}
         </div>
+      </div>
 
-        {/* Search, Brand, Availability & Sort Toolbar */}
-        <div
+      {/* Brand Section */}
+      <div>
+        <div style={{ fontSize: "12px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>
+          Brand
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          {SHOP_BRANDS.map((brand) => {
+            const isSelected = selectedBrand === brand;
+            const count = brandCounts[brand] || 0;
+            return (
+              <button
+                key={brand}
+                type="button"
+                onClick={() => setSelectedBrand(brand)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "7px 10px",
+                  borderRadius: "6px",
+                  border: "none",
+                  background: isSelected ? "#F1F5F9" : "transparent",
+                  color: isSelected ? "#E86F1C" : "#475569",
+                  fontSize: "13px",
+                  fontWeight: isSelected ? 700 : 500,
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <span>{brand}</span>
+                <span style={{ fontSize: "11px", color: isSelected ? "#E86F1C" : "#94A3B8" }}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Price Budget Section */}
+      <div>
+        <div style={{ fontSize: "12px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>
+          Price Range
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          {SHOP_PRICE_BRACKETS.map((b) => {
+            const isSelected = selectedPriceBracket === b.id;
+            return (
+              <label
+                key={b.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "13px",
+                  color: isSelected ? "#0F172A" : "#475569",
+                  fontWeight: isSelected ? 650 : 500,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="radio"
+                  name="priceBracket"
+                  checked={isSelected}
+                  onChange={() => setSelectedPriceBracket(b.id)}
+                  style={{ accentColor: "#E86F1C", cursor: "pointer" }}
+                />
+                <span>{b.label}</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Availability Toggle */}
+      <div style={{ paddingTop: "8px", borderTop: "1px solid #F1F5F9" }}>
+        <label
           style={{
-            background: "#FFFFFF",
-            border: "1px solid #E2E8F0",
-            borderRadius: "12px",
-            padding: "1rem 1.25rem",
-            marginBottom: "1.75rem",
             display: "flex",
-            flexDirection: "column",
-            gap: "1rem",
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
+            alignItems: "center",
+            gap: "8px",
+            fontSize: "13px",
+            color: "#0F172A",
+            fontWeight: 600,
+            cursor: "pointer",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              flexWrap: "wrap",
-            }}
-          >
-            {/* Search Input with Clear Button */}
+          <input
+            type="checkbox"
+            checked={onlyInStock}
+            onChange={(e) => setOnlyInStock(e.target.checked)}
+            style={{ accentColor: "#E86F1C", width: "16px", height: "16px", cursor: "pointer" }}
+          />
+          <span>In-Stock Only</span>
+        </label>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ background: "#F8FAFC", minHeight: "100vh" }}>
+      {/* Clean, Streamlined Header */}
+      <header
+        style={{
+          background: "#FFFFFF",
+          borderBottom: "1px solid #E2E8F0",
+          padding: "1.75rem 1.25rem",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "1280px",
+            margin: "0 auto",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "1rem",
+          }}
+        >
+          <div>
             <div
               style={{
-                position: "relative",
-                flex: "1 1 280px",
-                display: "flex",
-                alignItems: "center",
+                fontSize: "12px",
+                color: "#64748B",
+                marginBottom: "4px",
               }}
             >
-              <Search
-                size={18}
-                style={{
-                  position: "absolute",
-                  left: "12px",
-                  color: "#94A3B8",
-                  pointerEvents: "none",
-                }}
-              />
-              <input
-                type="text"
-                placeholder="Search cameras, lenses, drones, models, specifications..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{
-                  width: "100%",
-                  height: "40px",
-                  padding: "0 36px 0 38px",
-                  borderRadius: "8px",
-                  border: "1px solid #CBD5E1",
-                  fontSize: "13.5px",
-                  color: "#0F172A",
-                  outline: "none",
-                  background: "#FFFFFF",
-                }}
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  aria-label="Clear search"
-                  style={{
-                    position: "absolute",
-                    right: "10px",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "4px",
-                    color: "#94A3B8",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <X size={15} />
-                </button>
-              )}
+              <Link href="/" style={{ color: "#64748B", textDecoration: "none" }}>
+                Home
+              </Link>{" "}
+              / <span style={{ color: "#0F172A", fontWeight: 600 }}>Store</span>
             </div>
-
-            {/* Brand Filter Dropdown */}
-            <div style={{ flex: "0 1 180px", minWidth: "150px" }}>
-              <select
-                value={selectedBrand}
-                onChange={(e) => setSelectedBrand(e.target.value)}
-                style={{
-                  width: "100%",
-                  height: "40px",
-                  padding: "0 12px",
-                  borderRadius: "8px",
-                  border: "1px solid #CBD5E1",
-                  fontSize: "13px",
-                  color: "#0F172A",
-                  background: "#FFFFFF",
-                  fontWeight: 550,
-                  cursor: "pointer",
-                  outline: "none",
-                }}
-              >
-                {SHOP_BRANDS.map((brand) => (
-                  <option key={brand} value={brand}>
-                    {brand}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Sort Dropdown */}
-            <div style={{ flex: "0 1 190px", minWidth: "170px" }}>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                style={{
-                  width: "100%",
-                  height: "40px",
-                  padding: "0 12px",
-                  borderRadius: "8px",
-                  border: "1px solid #CBD5E1",
-                  fontSize: "13px",
-                  color: "#0F172A",
-                  background: "#FFFFFF",
-                  fontWeight: 550,
-                  cursor: "pointer",
-                  outline: "none",
-                }}
-              >
-                <option value="FEATURED">Sort: Featured</option>
-                <option value="PRICE_ASC">Price: Low to High</option>
-                <option value="PRICE_DESC">Price: High to Low</option>
-                <option value="RATING">Top Customer Rating</option>
-              </select>
-            </div>
-
-            {/* In-Stock Toggle */}
-            <label
+            <h1
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "13px",
-                color: "#334155",
-                fontWeight: 600,
-                cursor: "pointer",
-                userSelect: "none",
-                padding: "8px 12px",
-                borderRadius: "8px",
-                background: onlyInStock ? "#F1F5F9" : "transparent",
-                border: "1px solid",
-                borderColor: onlyInStock ? "#CBD5E1" : "transparent",
+                fontSize: "1.75rem",
+                fontWeight: 800,
+                color: "#0F172A",
+                margin: 0,
+                letterSpacing: "-0.02em",
               }}
             >
-              <input
-                type="checkbox"
-                checked={onlyInStock}
-                onChange={(e) => setOnlyInStock(e.target.checked)}
-                style={{ accentColor: "#E86F1C", width: "16px", height: "16px", cursor: "pointer" }}
-              />
-              <span>In-Stock Only</span>
-            </label>
+              Official Electronics Store
+            </h1>
+            <p style={{ fontSize: "13.5px", color: "#64748B", margin: "2px 0 0 0" }}>
+              100% genuine products with official Nepal warranty and insured courier delivery.
+            </p>
           </div>
 
-          {/* Active Filter Chips & Results Count Bar */}
-          <div
+          <Link
+            href="/source-request"
             style={{
-              display: "flex",
-              justifyContent: "space-between",
+              display: "inline-flex",
               alignItems: "center",
-              flexWrap: "wrap",
-              gap: "8px",
-              paddingTop: "0.75rem",
-              borderTop: "1px solid #F1F5F9",
-              fontSize: "13px",
+              gap: "6px",
+              background: "#0F172A",
+              color: "#FFFFFF",
+              padding: "8px 14px",
+              borderRadius: "6px",
+              fontSize: "12.5px",
+              fontWeight: 600,
+              textDecoration: "none",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-              <span style={{ color: "#64748B" }}>
-                Showing <strong style={{ color: "#0F172A" }}>{sorted.length}</strong> of{" "}
-                <strong style={{ color: "#0F172A" }}>{products.length}</strong> products
-              </span>
-
-              {selectedCat !== "All" && (
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    background: "#F1F5F9",
-                    color: "#334155",
-                    padding: "2px 8px",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                  }}
-                >
-                  Category: {selectedCat}
-                  <button
-                    onClick={() => setSelectedCat("All")}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: 0,
-                      color: "#64748B",
-                      display: "flex",
-                    }}
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              )}
-
-              {selectedBrand !== "All Brands" && (
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    background: "#F1F5F9",
-                    color: "#334155",
-                    padding: "2px 8px",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                  }}
-                >
-                  Brand: {selectedBrand}
-                  <button
-                    onClick={() => setSelectedBrand("All Brands")}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: 0,
-                      color: "#64748B",
-                      display: "flex",
-                    }}
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              )}
-
-              {onlyInStock && (
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    background: "#ECFDF5",
-                    color: "#059669",
-                    padding: "2px 8px",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                  }}
-                >
-                  In-Stock Only
-                  <button
-                    onClick={() => setOnlyInStock(false)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: 0,
-                      color: "#059669",
-                      display: "flex",
-                    }}
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              )}
-            </div>
-
-            {hasActiveFilters && (
-              <button
-                type="button"
-                onClick={clearAllFilters}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#E86F1C",
-                  fontSize: "12.5px",
-                  fontWeight: 650,
-                  cursor: "pointer",
-                  padding: "4px 8px",
-                }}
-              >
-                Reset All Filters
-              </button>
-            )}
-          </div>
+            <span>Need Custom Sourcing?</span>
+            <ArrowRight size={14} />
+          </Link>
         </div>
+      </header>
 
-        {/* Product Grid */}
-        {loading ? (
-          <div
+      {/* Main 2-Column Store Layout */}
+      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "1.5rem 1.25rem 4rem 1.25rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: "28px", alignItems: "start" }}>
+          {/* Desktop Left Sidebar */}
+          <aside
             style={{
-              textAlign: "center",
-              padding: "5rem 0",
               background: "#FFFFFF",
               borderRadius: "12px",
               border: "1px solid #E2E8F0",
-              color: "#64748B",
-              fontSize: "15px",
+              padding: "20px",
+              position: "sticky",
+              top: "20px",
+              maxHeight: "calc(100vh - 40px)",
+              overflowY: "auto",
+              overflowX: "hidden",
+              scrollbarWidth: "thin",
+              scrollbarColor: "#CBD5E1 transparent",
+              display: "block",
             }}
+            className="shop-desktop-sidebar"
           >
-            Loading catalogue products...
-          </div>
-        ) : sorted.length === 0 ? (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "4.5rem 2rem",
-              background: "#FFFFFF",
-              borderRadius: "14px",
-              border: "1px solid #E2E8F0",
-              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
-            }}
-          >
+            <FilterSidebar />
+          </aside>
+
+          {/* Right Main Content Area */}
+          <main>
+            {/* Top Toolbar: Search + Mobile Filter Trigger + Sort Dropdown */}
             <div
               style={{
-                width: "56px",
-                height: "56px",
-                borderRadius: "50%",
-                background: "#F1F5F9",
-                color: "#64748B",
-                display: "inline-flex",
+                background: "#FFFFFF",
+                borderRadius: "10px",
+                border: "1px solid #E2E8F0",
+                padding: "10px 14px",
+                marginBottom: "16px",
+                display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                marginBottom: "1rem",
+                justifyContent: "space-between",
+                gap: "12px",
+                flexWrap: "wrap",
               }}
             >
-              <Search size={24} />
-            </div>
-            <h3
-              style={{
-                fontSize: "1.25rem",
-                fontWeight: 700,
-                color: "#0F172A",
-                margin: "0 0 0.5rem 0",
-              }}
-            >
-              No products found matching your criteria
-            </h3>
-            <p
-              style={{
-                color: "#64748B",
-                fontSize: "14px",
-                maxWidth: "480px",
-                margin: "0 auto 1.5rem auto",
-                lineHeight: 1.5,
-              }}
-            >
-              We couldn't find any items matching &ldquo;{search || selectedCat}&rdquo;. Try
-              adjusting your search keywords or clearing your active filters.
-            </p>
-
-            <div style={{ display: "flex", justifyContent: "center", gap: "12px", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={clearAllFilters}
+              {/* Search Bar */}
+              <div
                 style={{
-                  background: "#E86F1C",
-                  color: "#FFFFFF",
-                  border: "none",
-                  padding: "10px 20px",
-                  borderRadius: "8px",
-                  fontSize: "13.5px",
-                  fontWeight: 650,
-                  cursor: "pointer",
+                  position: "relative",
+                  flex: "1 1 240px",
+                  display: "flex",
+                  alignItems: "center",
                 }}
               >
-                Reset All Filters
-              </button>
-              <Link
-                href="/source-request"
+                <Search
+                  size={16}
+                  style={{
+                    position: "absolute",
+                    left: "10px",
+                    color: "#94A3B8",
+                    pointerEvents: "none",
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder="Search cameras, lenses, drones, models..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{
+                    width: "100%",
+                    height: "36px",
+                    padding: "0 32px 0 34px",
+                    borderRadius: "6px",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "13px",
+                    color: "#0F172A",
+                    outline: "none",
+                    background: "#FFFFFF",
+                  }}
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    aria-label="Clear search"
+                    style={{
+                      position: "absolute",
+                      right: "8px",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: "2px",
+                      color: "#94A3B8",
+                      display: "flex",
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Right Controls: Count + Sort + Mobile Button */}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ fontSize: "13px", color: "#64748B", whiteSpace: "nowrap" }}>
+                  <strong style={{ color: "#0F172A" }}>{sorted.length}</strong> items
+                </span>
+
+                {/* Sort Dropdown */}
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  style={{
+                    height: "36px",
+                    padding: "0 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "13px",
+                    color: "#0F172A",
+                    background: "#FFFFFF",
+                    fontWeight: 550,
+                    cursor: "pointer",
+                    outline: "none",
+                  }}
+                >
+                  <option value="FEATURED">Featured</option>
+                  <option value="PRICE_ASC">Price: Low to High</option>
+                  <option value="PRICE_DESC">Price: High to Low</option>
+                  <option value="RATING">Top Rated</option>
+                </select>
+
+                {/* Mobile Filter Button (Visible on small screens) */}
+                <button
+                  type="button"
+                  onClick={() => setMobileDrawerOpen(true)}
+                  style={{
+                    display: "none",
+                    alignItems: "center",
+                    gap: "6px",
+                    height: "36px",
+                    padding: "0 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #0F172A",
+                    background: "#0F172A",
+                    color: "#FFFFFF",
+                    fontSize: "12.5px",
+                    fontWeight: 650,
+                    cursor: "pointer",
+                  }}
+                  className="shop-mobile-filter-btn"
+                >
+                  <SlidersHorizontal size={14} />
+                  <span>Filters</span>
+                  {activeFiltersCount > 0 && <span>({activeFiltersCount})</span>}
+                </button>
+              </div>
+            </div>
+
+            {/* Active Filter Tags (Clean single row) */}
+            {activeFiltersCount > 0 && (
+              <div
                 style={{
-                  background: "#0F172A",
-                  color: "#FFFFFF",
-                  textDecoration: "none",
-                  padding: "10px 20px",
-                  borderRadius: "8px",
-                  fontSize: "13.5px",
-                  fontWeight: 650,
-                  display: "inline-flex",
+                  display: "flex",
                   alignItems: "center",
                   gap: "6px",
+                  flexWrap: "wrap",
+                  marginBottom: "16px",
+                  fontSize: "12px",
                 }}
               >
-                <span>Request Custom Sourcing</span>
-                <ArrowRight size={14} />
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-              gap: "24px",
-            }}
-          >
-            {sorted.map((prod) => (
-              <ProductCard
-                key={prod.id}
-                product={{
-                  id: prod.id,
-                  title: prod.title,
-                  brand: prod.brand,
-                  category: prod.category,
-                  price: prod.price,
-                  originalPrice: prod.originalPrice,
-                  subtitle: prod.subtitle,
-                  trustNote: prod.trustNote,
-                  image: prod.image,
-                  images: prod.images,
-                  availabilityType: prod.availabilityType,
-                  warrantyInfo: prod.warrantyInfo,
-                  rating: prod.rating,
-                  reviewsCount: prod.reviewsCount,
-                }}
-                isWishlisted={wishlist.includes(prod.id)}
-                onToggleWishlist={handleToggleWishlist}
-                onAddToCart={(p, e) => handleAddToCart(prod, e)}
-                isAdded={addedId === prod.id}
-              />
-            ))}
-          </div>
-        )}
+                <span style={{ color: "#64748B", fontWeight: 600 }}>Active:</span>
 
-        {/* Custom Sourcing Callout Card */}
+                {selectedCat !== "All" && (
+                  <span
+                    style={{
+                      background: "#FFFFFF",
+                      border: "1px solid #CBD5E1",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      color: "#0F172A",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    {selectedCat}
+                    <button
+                      onClick={() => setSelectedCat("All")}
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: "#64748B" }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+
+                {selectedBrand !== "All Brands" && (
+                  <span
+                    style={{
+                      background: "#FFFFFF",
+                      border: "1px solid #CBD5E1",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      color: "#0F172A",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    {selectedBrand}
+                    <button
+                      onClick={() => setSelectedBrand("All Brands")}
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: "#64748B" }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+
+                {selectedPriceBracket !== "all" && (
+                  <span
+                    style={{
+                      background: "#FFF7ED",
+                      border: "1px solid #FFEDD5",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      color: "#C2410C",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    {SHOP_PRICE_BRACKETS.find((b) => b.id === selectedPriceBracket)?.label}
+                    <button
+                      onClick={() => setSelectedPriceBracket("all")}
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: "#C2410C" }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+
+                {onlyInStock && (
+                  <span
+                    style={{
+                      background: "#ECFDF5",
+                      border: "1px solid #D1FAE5",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      color: "#059669",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    In Stock Only
+                    <button
+                      onClick={() => setOnlyInStock(false)}
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: "#059669" }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#E86F1C",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    padding: "2px 6px",
+                  }}
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+
+            {/* Product Grid */}
+            {loading ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "4rem 0",
+                  background: "#FFFFFF",
+                  borderRadius: "10px",
+                  border: "1px solid #E2E8F0",
+                  color: "#64748B",
+                  fontSize: "14px",
+                }}
+              >
+                Loading catalogue products...
+              </div>
+            ) : sorted.length === 0 ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "4rem 2rem",
+                  background: "#FFFFFF",
+                  borderRadius: "12px",
+                  border: "1px solid #E2E8F0",
+                }}
+              >
+                <h3 style={{ fontSize: "1.15rem", fontWeight: 700, color: "#0F172A", margin: "0 0 0.5rem 0" }}>
+                  No matching products
+                </h3>
+                <p style={{ color: "#64748B", fontSize: "13.5px", margin: "0 auto 1.25rem auto", maxWidth: "420px" }}>
+                  We couldn't find any items matching your selected criteria. Try resetting your filters.
+                </p>
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
+                  style={{
+                    background: "#E86F1C",
+                    color: "#FFFFFF",
+                    border: "none",
+                    padding: "8px 18px",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    fontWeight: 650,
+                    cursor: "pointer",
+                  }}
+                >
+                  Reset All Filters
+                </button>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
+                  gap: "18px",
+                }}
+              >
+                {sorted.map((prod) => (
+                  <ProductCard
+                    key={prod.id}
+                    product={{
+                      id: prod.id,
+                      title: prod.title,
+                      brand: prod.brand,
+                      category: prod.category,
+                      price: prod.price,
+                      originalPrice: prod.originalPrice,
+                      subtitle: prod.subtitle,
+                      trustNote: prod.trustNote,
+                      tag: prod.tag,
+                      image: prod.image,
+                      images: prod.images,
+                      availabilityType: prod.availabilityType,
+                      warrantyInfo: prod.warrantyInfo,
+                      rating: prod.rating,
+                      reviewsCount: prod.reviewsCount,
+                    }}
+                    isWishlisted={wishlist.includes(prod.id)}
+                    onToggleWishlist={handleToggleWishlist}
+                    onAddToCart={(p, e) => handleAddToCart(prod, e)}
+                    isAdded={addedId === prod.id}
+                  />
+                ))}
+              </div>
+            )}
+          </main>
+        </div>
+
+        {/* Clean Reassurance Strip at Bottom (Not crowding the top) */}
         <div
           style={{
-            marginTop: "4rem",
+            marginTop: "3.5rem",
+            background: "#FFFFFF",
+            border: "1px solid #E2E8F0",
+            borderRadius: "12px",
+            padding: "1.5rem",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: "16px",
+          }}
+        >
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <ShieldCheck size={22} color="#E86F1C" style={{ flexShrink: 0 }} />
+            <div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>
+                100% Genuine Guarantee
+              </div>
+              <div style={{ fontSize: "11.5px", color: "#64748B" }}>
+                Official brand warranty with VAT bill
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <Truck size={22} color="#E86F1C" style={{ flexShrink: 0 }} />
+            <div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>
+                Insured Nepal Courier
+              </div>
+              <div style={{ fontSize: "11.5px", color: "#64748B" }}>
+                Tracked shipping to all 77 districts
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <RotateCcw size={22} color="#E86F1C" style={{ flexShrink: 0 }} />
+            <div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>
+                7-Day Replacement
+              </div>
+              <div style={{ fontSize: "11.5px", color: "#64748B" }}>
+                Immediate replacement for defects
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <Headphones size={22} color="#E86F1C" style={{ flexShrink: 0 }} />
+            <div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>
+                Janakpur Workshop Lab
+              </div>
+              <div style={{ fontSize: "11.5px", color: "#64748B" }}>
+                Pre-tested before final dispatch
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Custom Sourcing Card */}
+        <div
+          style={{
+            marginTop: "1.5rem",
             background: "#0F172A",
-            borderRadius: "14px",
-            padding: "2.5rem 2rem",
+            borderRadius: "12px",
+            padding: "2rem",
             color: "#FFFFFF",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             flexWrap: "wrap",
-            gap: "2rem",
-            border: "1px solid #1E293B",
+            gap: "1.5rem",
           }}
         >
-          <div style={{ maxWidth: "680px" }}>
-            <span
-              style={{
-                fontSize: "12px",
-                fontWeight: 750,
-                color: "#E86F1C",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                display: "block",
-                marginBottom: "6px",
-              }}
-            >
-              Direct Procurement Desk
-            </span>
-            <h2
-              style={{
-                fontSize: "1.65rem",
-                fontWeight: 800,
-                color: "#FFFFFF",
-                letterSpacing: "-0.015em",
-                margin: "0 0 0.5rem 0",
-              }}
-            >
+          <div>
+            <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#FFFFFF", margin: "0 0 0.35rem 0" }}>
               Looking for specialized cinema, drone, or studio equipment?
-            </h2>
-            <p
-              style={{
-                fontSize: "14px",
-                color: "#94A3B8",
-                margin: 0,
-                lineHeight: 1.6,
-              }}
-            >
-              If a specific camera body, cinema lens, drone payload, or broadcast device is not in our
-              immediate stock, our procurement team sources it directly via authorized manufacturer
-              channels with guaranteed Nepal customs clearance and official warranty.
+            </h3>
+            <p style={{ fontSize: "13.5px", color: "#94A3B8", margin: 0, maxWidth: "620px" }}>
+              If a specific camera body, lens, or broadcast device is not listed, our procurement desk
+              sources it directly through official channels.
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "10px" }}>
             <Link
               href="/source-request"
               style={{
                 background: "#E86F1C",
                 color: "#FFFFFF",
                 textDecoration: "none",
-                padding: "12px 24px",
-                borderRadius: "8px",
-                fontSize: "14px",
+                padding: "10px 18px",
+                borderRadius: "6px",
+                fontSize: "13px",
                 fontWeight: 700,
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "8px",
-                boxShadow: "0 2px 6px rgba(232, 111, 28, 0.3)",
+                gap: "6px",
               }}
             >
-              <span>Submit Sourcing Request</span>
-              <ArrowRight size={16} />
+              <span>Submit Request</span>
+              <ArrowRight size={14} />
             </Link>
             <a
               href="tel:+9779854025000"
               style={{
                 background: "#1E293B",
-                color: "#F8FAFC",
+                color: "#FFFFFF",
                 textDecoration: "none",
-                padding: "12px 20px",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: 650,
+                padding: "10px 16px",
+                borderRadius: "6px",
+                fontSize: "13px",
+                fontWeight: 600,
                 border: "1px solid #334155",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
               }}
             >
-              <Headphones size={16} color="#E86F1C" />
-              <span>Call Janakpur Desk</span>
+              +977-9854025000
             </a>
           </div>
         </div>
       </div>
+
+      {/* Mobile Drawer (Visible on small screens when triggered) */}
+      {mobileDrawerOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            zIndex: 99999,
+            display: "flex",
+            justifyContent: "flex-end",
+          }}
+          onClick={() => setMobileDrawerOpen(false)}
+        >
+          <div
+            style={{
+              width: "85%",
+              maxWidth: "320px",
+              height: "100%",
+              background: "#FFFFFF",
+              padding: "20px",
+              overflowY: "auto",
+              boxShadow: "-10px 0 25px rgba(0, 0, 0, 0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <span style={{ fontSize: "16px", fontWeight: 800, color: "#0F172A" }}>
+                Filter Products
+              </span>
+              <button
+                type="button"
+                onClick={() => setMobileDrawerOpen(false)}
+                style={{
+                  background: "#F1F5F9",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <FilterSidebar />
+
+            <button
+              type="button"
+              onClick={() => setMobileDrawerOpen(false)}
+              style={{
+                width: "100%",
+                marginTop: "24px",
+                background: "#E86F1C",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "6px",
+                padding: "11px",
+                fontSize: "13.5px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Show {sorted.length} Products
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Responsive Styles Injection */}
+      <style jsx global>{`
+        .shop-desktop-sidebar::-webkit-scrollbar {
+          width: 5px;
+        }
+        .shop-desktop-sidebar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .shop-desktop-sidebar::-webkit-scrollbar-thumb {
+          background: #CBD5E1;
+          border-radius: 4px;
+        }
+        .shop-desktop-sidebar::-webkit-scrollbar-thumb:hover {
+          background: #94A3B8;
+        }
+        @media (max-width: 860px) {
+          .shop-desktop-sidebar {
+            display: none !important;
+          }
+          .shop-mobile-filter-btn {
+            display: inline-flex !important;
+          }
+          div[style*="gridTemplateColumns: 240px 1fr"] {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
+
+      {/* Cart Toast Notification */}
+      {cartToast.visible && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "24px",
+            right: "24px",
+            zIndex: 99999,
+            background: "#0F172A",
+            color: "#FFFFFF",
+            padding: "12px 16px",
+            borderRadius: "8px",
+            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.3)",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            border: "1px solid #334155",
+            maxWidth: "380px",
+          }}
+        >
+          <div
+            style={{
+              width: "24px",
+              height: "24px",
+              borderRadius: "50%",
+              background: "#16A34A",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Check size={14} strokeWidth={3} />
+          </div>
+
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            <div style={{ fontSize: "11px", color: "#94A3B8", textTransform: "uppercase", fontWeight: 700 }}>
+              Added to Cart
+            </div>
+            <div
+              style={{
+                fontSize: "12.5px",
+                fontWeight: 650,
+                color: "#FFFFFF",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {cartToast.name}
+            </div>
+          </div>
+
+          <Link
+            href="/cart"
+            style={{
+              background: "#E86F1C",
+              color: "#FFFFFF",
+              textDecoration: "none",
+              padding: "5px 10px",
+              borderRadius: "5px",
+              fontSize: "12px",
+              fontWeight: 700,
+              flexShrink: 0,
+            }}
+          >
+            View Cart
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

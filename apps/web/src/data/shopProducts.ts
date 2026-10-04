@@ -1,5 +1,4 @@
 import { ProductCardData } from "@/components/ProductCard";
-import { ProductItem } from "@sharmavideocare/shared";
 
 export interface ShopProduct extends ProductCardData {
   sku: string;
@@ -7,6 +6,7 @@ export interface ShopProduct extends ProductCardData {
   stockQuantity: number;
   specifications: Record<string, string>;
   returnPolicyInfo?: string;
+  tag?: string;
 }
 
 export const SHOP_PRODUCTS: ShopProduct[] = [
@@ -15,6 +15,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     title: "Canon EOS R5 Mirrorless Camera Body",
     subtitle: "45MP Full-Frame • 8K RAW • In-Body IS",
     trustNote: "Official Canon Nepal 1-Yr Warranty • Free Express Shipping",
+    tag: "Authorized Canon Stock",
     category: "Cameras",
     brand: "Canon",
     model: "EOS R5",
@@ -45,6 +46,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     title: "Sony Alpha A7 IV Full-Frame Camera Body",
     subtitle: "33MP Exmor R • 4K 60p • 10-bit 4:2:2",
     trustNote: "Sony Nepal Authorized Warranty • Same-Day Janakpur Dispatch",
+    tag: "Official Sony Nepal",
     category: "Cameras",
     brand: "Sony",
     model: "ILCE-7M4",
@@ -75,6 +77,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     title: "DJI Mini 4 Pro Drone with RC 2 Controller",
     subtitle: "Under 249g • 4K/60fps HDR • Omnidirectional Sensing",
     trustNote: "Official DJI Nepal Stock • Free Janakpur Demonstration",
+    tag: "Official DJI Stock",
     category: "Drones",
     brand: "DJI",
     model: "Mini 4 Pro RC 2",
@@ -105,6 +108,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     title: "Sony FE 24-70mm f/2.8 GM II Standard Zoom Lens",
     subtitle: "G Master Quality • Constant f/2.8 • Ultra Compact",
     trustNote: "Genuine Sony Lens • Clean Room Calibrated",
+    tag: "G Master Optical",
     category: "Lenses",
     brand: "Sony",
     model: "SEL2470GM2",
@@ -135,6 +139,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     title: "Canon RF 50mm f/1.2 L USM Prime Lens",
     subtitle: "f/1.2 Maximum Aperture • Ring USM • Weather Sealed",
     trustNote: "Canon L-Series Optical Excellence • 1-Yr Nepal Warranty",
+    tag: "L-Series Prime",
     category: "Lenses",
     brand: "Canon",
     model: "RF 50mm f/1.2L",
@@ -165,6 +170,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     title: "Apple MacBook Pro 16\" Liquid Retina XDR",
     subtitle: "Apple M3 Pro Chip • 18GB Unified RAM • 512GB SSD",
     trustNote: "Apple Authorized Warranty • MDMS Cleared • Sealed Pack",
+    tag: "Apple Authorized",
     category: "Laptops",
     brand: "Apple",
     model: "MacBook Pro 16 M3 Pro",
@@ -195,6 +201,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     title: "Apple iPhone 15 Pro Max 256GB Titanium",
     subtitle: "Grade 5 Titanium • A17 Pro Chip • 48MP Pro",
     trustNote: "100% MDMS Registered • Official NTA Approved • 1-Yr Warranty",
+    tag: "MDMS Tax Paid",
     category: "Mobile",
     brand: "Apple",
     model: "iPhone 15 Pro Max",
@@ -225,6 +232,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     title: "Sony WH-1000XM5 Wireless Noise-Cancelling Headphones",
     subtitle: "Industry-Leading ANC • Auto NC Optimizer",
     trustNote: "Original Sony Nepal Box Pack • 1-Yr Official Warranty",
+    tag: "100% Genuine Box",
     category: "Audio",
     brand: "Sony",
     model: "WH-1000XM5",
@@ -255,6 +263,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     title: "Hikvision 4K Ultra HD Outdoor Bullet CCTV System",
     subtitle: "8MP Ultra HD • Smart IR 30m • IP67 Metal Chassis",
     trustNote: "Genuine Hikvision Nepal • Professional Installation Available",
+    tag: "Commercial Grade 4K",
     category: "CCTV",
     brand: "Hikvision",
     model: "DS-2CE16U1T-ITF",
@@ -285,6 +294,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     title: "Nikon D850 DSLR Camera + 24-120mm Kit",
     subtitle: "45.7MP FX Sensor • 4K UHD • Certified Used & Tested",
     trustNote: "Tested & Certified in Janakpur Lab • 90-Day Warranty",
+    tag: "Lab Certified Grade A",
     category: "Cameras",
     brand: "Nikon",
     model: "D850 + 24-120mm VR",
@@ -315,6 +325,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     title: "Daikin 1.5 Ton 5-Star Inverter Split AC",
     subtitle: "Triple Display • PM 2.5 Filter • 100% Copper Condenser",
     trustNote: "Official Daikin Nepal • Janakpur Professional Installation Available",
+    tag: "5-Star Inverter",
     category: "Appliances",
     brand: "Daikin",
     model: "FTKL50TV16U",
@@ -345,6 +356,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     title: "LG 8kg AI DirectDrive Front-Load Smart Washer",
     subtitle: "AI DD™ • Steam™ Allergy Care • 1400 RPM",
     trustNote: "Official LG Nepal • 10-Yr Motor Warranty • Express Delivery",
+    tag: "AI DirectDrive",
     category: "Appliances",
     brand: "LG",
     model: "FHM1408BDW",
@@ -395,3 +407,18 @@ export const SHOP_BRANDS = [
   "LG",
   "Daikin",
 ] as const;
+
+export interface PriceBracket {
+  id: string;
+  label: string;
+  min: number;
+  max: number;
+}
+
+export const SHOP_PRICE_BRACKETS: PriceBracket[] = [
+  { id: "all", label: "All Budgets", min: 0, max: Infinity },
+  { id: "under-50k", label: "Under Rs. 50K", min: 0, max: 50000 },
+  { id: "50k-150k", label: "Rs. 50K – 1.5 Lakhs", min: 50000, max: 150000 },
+  { id: "150k-300k", label: "Rs. 1.5L – 3 Lakhs", min: 150000, max: 300000 },
+  { id: "above-300k", label: "Above Rs. 3 Lakhs", min: 300000, max: Infinity },
+];
