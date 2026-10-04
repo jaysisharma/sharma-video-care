@@ -1,0 +1,10 @@
+apps/mobile
+docs
+.vscode
+.git
+.github
+*.pdf
+*.log
+.DS_Store
+.next
+apps/web/.next
