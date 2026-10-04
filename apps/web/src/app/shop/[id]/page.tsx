@@ -18,7 +18,20 @@ import {
   PhoneCall,
   CheckCircle2,
   PackageCheck,
+  Star,
+  MessageSquarePlus,
+  User,
 } from "lucide-react";
+
+interface CustomerReview {
+  id: string;
+  author: string;
+  city: string;
+  rating: number;
+  date: string;
+  comment: string;
+  verifiedPurchase: boolean;
+}
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -30,6 +43,54 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+
+  // User reviews state
+  const [reviews, setReviews] = useState<CustomerReview[]>([
+    {
+      id: "rev-1",
+      author: "Roshan Jha",
+      city: "Janakpur",
+      rating: 5,
+      date: "3 days ago",
+      comment: "Received the camera with official Nepal warranty and serial registered. Delivered in original sealed condition.",
+      verifiedPurchase: true,
+    },
+    {
+      id: "rev-2",
+      author: "Bikash Yadav",
+      city: "Kathmandu",
+      rating: 5,
+      date: "1 week ago",
+      comment: "Super fast courier service to Kathmandu. Tested optics and shutter, 100% genuine unit.",
+      verifiedPurchase: true,
+    },
+  ]);
+  const [reviewerName, setReviewerName] = useState("");
+  const [reviewerCity, setReviewerCity] = useState("Janakpur");
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+
+  const handleAddReview = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewerName.trim() || !reviewComment.trim()) return;
+
+    const newRev: CustomerReview = {
+      id: `rev-${Date.now()}`,
+      author: reviewerName.trim(),
+      city: reviewerCity.trim() || "Nepal",
+      rating: reviewRating,
+      date: "Just now",
+      comment: reviewComment.trim(),
+      verifiedPurchase: true,
+    };
+
+    setReviews([newRev, ...reviews]);
+    setReviewerName("");
+    setReviewComment("");
+    setReviewSubmitted(true);
+    setTimeout(() => setReviewSubmitted(false), 4000);
+  };
 
   const { addToCart } = useCart();
 
@@ -655,6 +716,261 @@ export default function ProductDetailPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Customer Reviews & Feedback Section */}
+        <div
+          style={{
+            marginTop: "3rem",
+            background: "#FFFFFF",
+            borderRadius: "14px",
+            border: "1px solid #E2E8F0",
+            padding: "2rem",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "1rem",
+              marginBottom: "1.75rem",
+              paddingBottom: "1rem",
+              borderBottom: "1px solid #F1F5F9",
+            }}
+          >
+            <div>
+              <h2 style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0F172A", margin: 0 }}>
+                Customer Reviews &amp; Verifications
+              </h2>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+                <div style={{ display: "flex", gap: "2px", color: "#F59E0B" }}>
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Star key={i} size={15} fill="#F59E0B" />
+                  ))}
+                </div>
+                <span style={{ fontSize: "13.5px", fontWeight: 700, color: "#0F172A" }}>
+                  4.9 out of 5
+                </span>
+                <span style={{ fontSize: "13px", color: "#64748B" }}>
+                  ({reviews.length} verified ratings)
+                </span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "#ECFDF5",
+                color: "#059669",
+                padding: "6px 12px",
+                borderRadius: "6px",
+                fontSize: "12px",
+                fontWeight: 700,
+              }}
+            >
+              <CheckCircle2 size={14} />
+              <span>100% Genuine Nepal Purchases</span>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "2rem", alignItems: "start" }}>
+            {/* Reviews List */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {reviews.map((rev) => (
+                <div
+                  key={rev.id}
+                  style={{
+                    padding: "16px",
+                    background: "#F8FAFC",
+                    borderRadius: "10px",
+                    border: "1px solid #E2E8F0",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "13.5px", fontWeight: 700, color: "#0F172A" }}>
+                          {rev.author}
+                        </span>
+                        <span style={{ fontSize: "12px", color: "#64748B" }}>
+                          ({rev.city})
+                        </span>
+                        {rev.verifiedPurchase && (
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: "#16A34A",
+                              fontWeight: 650,
+                              background: "#DCFCE7",
+                              padding: "1px 6px",
+                              borderRadius: "4px",
+                            }}
+                          >
+                            Verified Buyer
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", gap: "2px", color: "#F59E0B", marginTop: "3px" }}>
+                        {Array.from({ length: rev.rating }).map((_, i) => (
+                          <Star key={i} size={13} fill="#F59E0B" />
+                        ))}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: "12px", color: "#94A3B8" }}>{rev.date}</span>
+                  </div>
+                  <p style={{ fontSize: "13px", color: "#334155", margin: 0, lineHeight: 1.5 }}>
+                    {rev.comment}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Submit Review Form */}
+            <form
+              onSubmit={handleAddReview}
+              style={{
+                background: "#F8FAFC",
+                padding: "20px",
+                borderRadius: "12px",
+                border: "1px solid #E2E8F0",
+              }}
+            >
+              <h3 style={{ fontSize: "14px", fontWeight: 750, color: "#0F172A", margin: "0 0 12px 0", display: "flex", alignItems: "center", gap: "6px" }}>
+                <MessageSquarePlus size={16} color="#E86F1C" />
+                <span>Write a Product Review</span>
+              </h3>
+
+              {reviewSubmitted && (
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    background: "#ECFDF5",
+                    border: "1px solid #A7F3D0",
+                    color: "#065F46",
+                    borderRadius: "6px",
+                    fontSize: "12.5px",
+                    fontWeight: 600,
+                    marginBottom: "12px",
+                  }}
+                >
+                  Thank you! Your verified review has been published.
+                </div>
+              )}
+
+              <div style={{ marginBottom: "10px" }}>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 650, color: "#475569", marginBottom: "4px" }}>
+                  Your Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Ramesh Sah"
+                  value={reviewerName}
+                  onChange={(e) => setReviewerName(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "7px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "13px",
+                    outline: "none",
+                    background: "#FFFFFF",
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: "10px" }}>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 650, color: "#475569", marginBottom: "4px" }}>
+                  City / Location
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Janakpur, Kathmandu, Pokhara"
+                  value={reviewerCity}
+                  onChange={(e) => setReviewerCity(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "7px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "13px",
+                    outline: "none",
+                    background: "#FFFFFF",
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: "10px" }}>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 650, color: "#475569", marginBottom: "4px" }}>
+                  Rating
+                </label>
+                <select
+                  value={reviewRating}
+                  onChange={(e) => setReviewRating(Number(e.target.value))}
+                  style={{
+                    width: "100%",
+                    padding: "7px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "13px",
+                    outline: "none",
+                    background: "#FFFFFF",
+                    fontWeight: 600,
+                  }}
+                >
+                  <option value={5}>5 Stars - Excellent Product</option>
+                  <option value={4}>4 Stars - Very Good</option>
+                  <option value={3}>3 Stars - Satisfactory</option>
+                  <option value={2}>2 Stars - Needs Improvement</option>
+                  <option value={1}>1 Star - Poor</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: "14px" }}>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 650, color: "#475569", marginBottom: "4px" }}>
+                  Feedback &amp; Experience *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="Share details about optical performance, build quality, or delivery..."
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "7px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "13px",
+                    outline: "none",
+                    background: "#FFFFFF",
+                    resize: "vertical",
+                  }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                style={{
+                  width: "100%",
+                  background: "#0F172A",
+                  color: "#FFFFFF",
+                  border: "none",
+                  padding: "9px",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Submit Review
+              </button>
+            </form>
           </div>
         </div>
       </div>

@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, doc, getDoc, updateDoc, increment } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
@@ -84,6 +84,37 @@ export default function CheckoutPage() {
       };
 
       const docRef = await addDoc(collection(db, "orders"), orderData);
+
+      // Decrement stock in Firestore for each item in the order (Inventory Sync)
+      for (const item of items) {
+        try {
+          if (item.productType === "USED") {
+            const usedRef = doc(db, "usedProducts", item.productId);
+            const usedSnap = await getDoc(usedRef);
+            if (usedSnap.exists()) {
+              await updateDoc(usedRef, {
+                status: "SOLD",
+                availability: "SOLD",
+                updatedAt: new Date().toISOString(),
+              });
+            }
+          } else {
+            const prodRef = doc(db, "products", item.productId);
+            const prodSnap = await getDoc(prodRef);
+            if (prodSnap.exists()) {
+              const currentStock = prodSnap.data().stockQuantity || 0;
+              const newStock = Math.max(0, currentStock - item.quantity);
+              await updateDoc(prodRef, {
+                stockQuantity: newStock,
+                availabilityType: newStock === 0 ? "OUT_OF_STOCK" : "IN_STOCK",
+                updatedAt: new Date().toISOString(),
+              });
+            }
+          }
+        } catch (stockErr) {
+          console.warn(`Could not sync inventory for product ${item.productId}:`, stockErr);
+        }
+      }
 
       // Create linked chat for order updates
       await addDoc(collection(db, "conversations"), {

@@ -40,6 +40,7 @@ function ShopContent() {
   const [selectedCat, setSelectedCat] = useState<string>(urlCat || "All");
   const [selectedBrand, setSelectedBrand] = useState<string>("All Brands");
   const [selectedPriceBracket, setSelectedPriceBracket] = useState<string>("all");
+  const [maxPrice, setMaxPrice] = useState<number>(500000);
   const [sortBy, setSortBy] = useState<"FEATURED" | "PRICE_ASC" | "PRICE_DESC" | "RATING">("FEATURED");
   const [onlyInStock, setOnlyInStock] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -160,14 +161,14 @@ function ShopContent() {
 
       const matchesStock = !onlyInStock || p.availabilityType === "IN_STOCK";
 
-      let matchesPrice = true;
-      if (bracket && bracket.id !== "all") {
+      let matchesPrice = p.price <= maxPrice;
+      if (matchesPrice && bracket && bracket.id !== "all") {
         matchesPrice = p.price >= bracket.min && p.price < bracket.max;
       }
 
       return matchesSearch && matchesCat && matchesBrand && matchesStock && matchesPrice;
     });
-  }, [products, search, selectedCat, selectedBrand, onlyInStock, selectedPriceBracket]);
+  }, [products, search, selectedCat, selectedBrand, onlyInStock, selectedPriceBracket, maxPrice]);
 
   // Sorting
   const sorted = useMemo(() => {
@@ -215,6 +216,7 @@ function ShopContent() {
     setSelectedCat("All");
     setSelectedBrand("All Brands");
     setSelectedPriceBracket("all");
+    setMaxPrice(500000);
     setSortBy("FEATURED");
     setOnlyInStock(false);
     if (urlQuery || urlCat) {
@@ -227,6 +229,7 @@ function ShopContent() {
     (selectedCat !== "All" ? 1 : 0) +
     (selectedBrand !== "All Brands" ? 1 : 0) +
     (selectedPriceBracket !== "all" ? 1 : 0) +
+    (maxPrice < 500000 ? 1 : 0) +
     (onlyInStock ? 1 : 0) +
     (sortBy !== "FEATURED" ? 1 : 0);
 
@@ -330,9 +333,31 @@ function ShopContent() {
 
       {/* Price Budget Section */}
       <div>
-        <div style={{ fontSize: "12px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>
-          Price Range
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            Max Price
+          </span>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: "#E86F1C" }}>
+            NPR {maxPrice.toLocaleString("en-IN")}
+          </span>
         </div>
+        
+        {/* Interactive Price Range Slider */}
+        <input
+          type="range"
+          min="1000"
+          max="500000"
+          step="5000"
+          value={maxPrice}
+          onChange={(e) => setMaxPrice(Number(e.target.value))}
+          style={{
+            width: "100%",
+            accentColor: "#E86F1C",
+            cursor: "pointer",
+            marginBottom: "12px",
+          }}
+        />
+
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           {SHOP_PRICE_BRACKETS.map((b) => {
             const isSelected = selectedPriceBracket === b.id;
@@ -765,6 +790,30 @@ function ShopContent() {
                     {SHOP_PRICE_BRACKETS.find((b) => b.id === selectedPriceBracket)?.label}
                     <button
                       onClick={() => setSelectedPriceBracket("all")}
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: "#C2410C" }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+
+                {maxPrice < 500000 && (
+                  <span
+                    style={{
+                      background: "#FFF7ED",
+                      border: "1px solid #FFEDD5",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      color: "#C2410C",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    Under NPR {maxPrice.toLocaleString("en-IN")}
+                    <button
+                      onClick={() => setMaxPrice(500000)}
                       style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: "#C2410C" }}
                     >
                       <X size={12} />
