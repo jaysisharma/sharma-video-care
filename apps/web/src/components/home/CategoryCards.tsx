@@ -3,8 +3,10 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useLanguage } from "@/context/LanguageContext";
 
 export const CategoryCards: React.FC = () => {
+  const { language } = useLanguage();
   return (
     <section
       style={{
@@ -95,7 +97,7 @@ export const CategoryCards: React.FC = () => {
                   letterSpacing: "-0.01em",
                 }}
               >
-                Repair Services
+                {language === "ne" ? "इलेक्ट्रोनिक्स मर्मत" : "Repair Services"}
               </h3>
             </div>
             <p
@@ -107,7 +109,9 @@ export const CategoryCards: React.FC = () => {
                 fontWeight: 450,
               }}
             >
-              AC, TV, Camera, Laptop, Washing Machine and more
+              {language === "ne"
+                ? "एसी, टिभी, क्यामेरा, ल्यापटप, वाशिङ मेसिन र थप"
+                : "AC, TV, Camera, Laptop, Washing Machine and more"}
             </p>
           </div>
 
@@ -246,7 +250,7 @@ export const CategoryCards: React.FC = () => {
                   letterSpacing: "-0.01em",
                 }}
               >
-                Shop Products
+                {language === "ne" ? "नयाँ इलेक्ट्रोनिक्स" : "Shop Products"}
               </h3>
             </div>
             <p
@@ -258,7 +262,9 @@ export const CategoryCards: React.FC = () => {
                 fontWeight: 450,
               }}
             >
-              New electronics, accessories and more
+              {language === "ne"
+                ? "नयाँ इलेक्ट्रोनिक्स, सामानहरू र थप"
+                : "New electronics, accessories and more"}
             </p>
           </div>
 
@@ -396,7 +402,7 @@ export const CategoryCards: React.FC = () => {
                   letterSpacing: "-0.01em",
                 }}
               >
-                Used Products
+                {language === "ne" ? "सेकेन्ड-ह्यान्ड सामग्री" : "Used Products"}
               </h3>
             </div>
             <p
@@ -408,7 +414,9 @@ export const CategoryCards: React.FC = () => {
                 fontWeight: 450,
               }}
             >
-              Quality second-hand items at great prices
+              {language === "ne"
+                ? "किफायती मूल्यमा प्रमाणित सेकेन्ड-ह्यान्ड उपकरण"
+                : "Quality second-hand items at great prices"}
             </p>
           </div>
 
@@ -545,7 +553,7 @@ export const CategoryCards: React.FC = () => {
                   letterSpacing: "-0.01em",
                 }}
               >
-                CCTV &amp; Security
+                {language === "ne" ? "सीसीटिभी र सेक्युरिटी" : "CCTV & Security"}
               </h3>
             </div>
             <p
@@ -557,7 +565,9 @@ export const CategoryCards: React.FC = () => {
                 fontWeight: 450,
               }}
             >
-              Complete surveillance camera setup and maintenance
+              {language === "ne"
+                ? "पूर्ण क्यामेरा जडान र मर्मत सम्भार सेवा"
+                : "Complete surveillance camera setup and maintenance"}
             </p>
           </div>
 

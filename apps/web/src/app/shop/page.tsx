@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { useCart } from "../../context/CartContext";
+import { useLanguage } from "../../context/LanguageContext";
 import { ProductCard } from "@/components/ProductCard";
 import {
   SHOP_PRODUCTS,
@@ -68,6 +69,7 @@ function ShopContent() {
   });
 
   const { addToCart } = useCart();
+  const { language, t } = useLanguage();
 
   useEffect(() => {
     async function loadProducts() {
@@ -443,9 +445,9 @@ function ShopContent() {
               }}
             >
               <Link href="/" style={{ color: "#64748B", textDecoration: "none" }}>
-                Home
+                {language === "ne" ? "गृहपृष्ठ" : "Home"}
               </Link>{" "}
-              / <span style={{ color: "#0F172A", fontWeight: 600 }}>Store</span>
+              / <span style={{ color: "#0F172A", fontWeight: 600 }}>{language === "ne" ? "स्टोर" : "Store"}</span>
             </div>
             <h1
               style={{
@@ -456,10 +458,10 @@ function ShopContent() {
                 letterSpacing: "-0.02em",
               }}
             >
-              Official Electronics Store
+              {t("shop.title")}
             </h1>
             <p style={{ fontSize: "13.5px", color: "#64748B", margin: "2px 0 0 0" }}>
-              100% genuine products with official Nepal warranty and insured courier delivery.
+              {t("shop.subtitle")}
             </p>
           </div>
 
@@ -478,7 +480,7 @@ function ShopContent() {
             }}
           >
             <ShieldCheck size={16} color="#16A34A" />
-            <span>100% Genuine • Official Warranty</span>
+            <span>{t("shop.genuineBadge")}</span>
           </div>
         </div>
       </header>

@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useLanguage } from "@/context/LanguageContext";
 
 export interface ProductCardData {
   id: string;
@@ -40,6 +41,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   isAdded = false,
   href,
 }) => {
+  const { language } = useLanguage();
   const [localWishlisted, setLocalWishlisted] = useState(isWishlisted);
   const [isCardHovered, setIsCardHovered] = useState(false);
 
@@ -129,7 +131,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               boxShadow: "0 2px 6px rgba(232, 111, 28, 0.25)",
             }}
           >
-            SALE
+            {language === "ne" ? "छुट" : "SALE"}
           </span>
         )}
 
@@ -373,7 +375,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                         borderRadius: "4px",
                       }}
                     >
-                      Save Rs. {savingsAmount.toLocaleString("en-IN")}
+                      {language === "ne"
+                        ? `बचत रु. ${savingsAmount.toLocaleString("en-IN")}`
+                        : `Save Rs. ${savingsAmount.toLocaleString("en-IN")}`}
                     </span>
                   )}
                 </>
@@ -385,7 +389,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                     fontWeight: 500,
                   }}
                 >
-                  Official Warranty
+                  {language === "ne" ? "आधिकारिक वारेन्टी" : "Official Warranty"}
                 </span>
               )}
             </div>
@@ -436,7 +440,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 >
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                <span>Added</span>
+                <span>{language === "ne" ? "थपियो" : "Added"}</span>
               </>
             ) : (
               <>
@@ -454,7 +458,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                   <circle cx="20" cy="21" r="1" />
                   <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
                 </svg>
-                <span>Add to Cart</span>
+                <span>{language === "ne" ? "कार्टमा थप्नुहोस्" : "Add to Cart"}</span>
               </>
             )}
           </button>

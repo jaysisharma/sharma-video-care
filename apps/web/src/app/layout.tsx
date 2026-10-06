@@ -3,6 +3,7 @@ import { Inter, Noto_Sans_Devanagari, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "../context/AuthContext";
 import { CartProvider } from "../context/CartContext";
+import { LanguageProvider } from "../context/LanguageContext";
 import { AppShell } from "../components/AppShell";
 
 const inter = Inter({
@@ -122,7 +123,9 @@ export default function RootLayout({
       <body>
         <AuthProvider>
           <CartProvider>
-            <AppShell>{children}</AppShell>
+            <LanguageProvider>
+              <AppShell>{children}</AppShell>
+            </LanguageProvider>
           </CartProvider>
         </AuthProvider>
       </body>

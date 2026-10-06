@@ -5,6 +5,7 @@ import Link from "next/link";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useCart } from "@/context/CartContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { ProductCard, ProductCardData } from "@/components/ProductCard";
 
 // Comprehensive catalog items for the storefront
@@ -178,8 +179,21 @@ const CATEGORIES = [
   "Appliances",
 ];
 
+const CATEGORY_NAMES_NE: Record<string, string> = {
+  All: "सबै",
+  Cameras: "क्यामेरा",
+  Lenses: "लेन्स",
+  Drones: "ड्रोन",
+  CCTV: "सीसीटिभी",
+  Audio: "अडियो",
+  Laptops: "ल्यापटप",
+  Mobile: "मोबाइल",
+  Appliances: "घरेलु उपकरण",
+};
+
 export const StoreCatalogue: React.FC = () => {
   const { addToCart } = useCart();
+  const { language } = useLanguage();
   const [products, setProducts] = useState<ProductCardData[]>(CATALOGUE_ITEMS);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -307,7 +321,7 @@ export const StoreCatalogue: React.FC = () => {
               marginBottom: "4px",
             }}
           >
-            Official Store Catalogue
+            {language === "ne" ? "आधिकारिक स्टोर क्याटलग" : "Official Store Catalogue"}
           </div>
           <div
             style={{
@@ -328,7 +342,9 @@ export const StoreCatalogue: React.FC = () => {
                   margin: 0,
                 }}
               >
-                Explore Full Equipment Catalogue
+                {language === "ne"
+                  ? "सम्पूर्ण उपकरण क्याटलग हेर्नुहोस्"
+                  : "Explore Full Equipment Catalogue"}
               </h2>
               <p
                 style={{
@@ -338,7 +354,9 @@ export const StoreCatalogue: React.FC = () => {
                   maxWidth: "680px",
                 }}
               >
-                Search and explore cameras, lenses, drones, surveillance systems, and tech accessories with genuine warranty and Nepal-wide courier delivery.
+                {language === "ne"
+                  ? "क्यामेरा, लेन्स, ड्रोन, सुरक्षा क्यामेरा र प्रविधि सामग्री खोज्नुहोस् — आधिकारिक वारेन्टी र नेपालभर सुरक्षित डेलिभरी।"
+                  : "Search and explore cameras, lenses, drones, surveillance systems, and tech accessories with genuine warranty and Nepal-wide courier delivery."}
               </p>
             </div>
 
@@ -349,8 +367,17 @@ export const StoreCatalogue: React.FC = () => {
                 color: "#8C827A",
               }}
             >
-              Showing <strong style={{ color: "#181512" }}>{displayedProducts.length}</strong> of{" "}
-              <strong style={{ color: "#181512" }}>{filtered.length}</strong> items
+              {language === "ne" ? (
+                <>
+                  जम्मा <strong style={{ color: "#181512" }}>{displayedProducts.length}</strong> /{" "}
+                  <strong style={{ color: "#181512" }}>{filtered.length}</strong> सामान
+                </>
+              ) : (
+                <>
+                  Showing <strong style={{ color: "#181512" }}>{displayedProducts.length}</strong> of{" "}
+                  <strong style={{ color: "#181512" }}>{filtered.length}</strong> items
+                </>
+              )}
             </span>
           </div>
         </div>
@@ -407,7 +434,11 @@ export const StoreCatalogue: React.FC = () => {
               </svg>
               <input
                 type="text"
-                placeholder="Search cameras, lenses, drones, models, e.g. Canon R5, Sony..."
+                placeholder={
+                  language === "ne"
+                    ? "क्यामेरा, लेन्स, ड्रोन, मोडेल खोज्नुहोस् (उदा. Canon R5, Sony)..."
+                    : "Search cameras, lenses, drones, models, e.g. Canon R5, Sony..."
+                }
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
@@ -448,7 +479,9 @@ export const StoreCatalogue: React.FC = () => {
 
             {/* Sort Dropdown */}
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ fontSize: "12.5px", color: "#8C827A" }}>Sort:</span>
+              <span style={{ fontSize: "12.5px", color: "#8C827A" }}>
+                {language === "ne" ? "क्रमबद्ध:" : "Sort:"}
+              </span>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
@@ -464,10 +497,10 @@ export const StoreCatalogue: React.FC = () => {
                   outline: "none",
                 }}
               >
-                <option value="FEATURED">Featured</option>
-                <option value="PRICE_ASC">Price: Low to High</option>
-                <option value="PRICE_DESC">Price: High to Low</option>
-                <option value="RATING">Highest Rated</option>
+                <option value="FEATURED">{language === "ne" ? "विशेष" : "Featured"}</option>
+                <option value="PRICE_ASC">{language === "ne" ? "मूल्य: कम देखि बढी" : "Price: Low to High"}</option>
+                <option value="PRICE_DESC">{language === "ne" ? "मूल्य: बढी देखि कम" : "Price: High to Low"}</option>
+                <option value="RATING">{language === "ne" ? "उच्च मूल्याङ्कन" : "Highest Rated"}</option>
               </select>
             </div>
           </div>
@@ -510,7 +543,7 @@ export const StoreCatalogue: React.FC = () => {
                     if (!isActive) e.currentTarget.style.background = "#F4F0E8";
                   }}
                 >
-                  {cat}
+                  {language === "ne" ? (CATEGORY_NAMES_NE[cat] || cat) : cat}
                 </button>
               );
             })}
@@ -546,10 +579,12 @@ export const StoreCatalogue: React.FC = () => {
               🔍
             </div>
             <h3 style={{ fontSize: "17px", fontWeight: 750, color: "#181512", margin: "0 0 6px 0" }}>
-              No items match your search & filter
+              {language === "ne" ? "तपाईंको खोज अनुसार कुनै सामान भेटिएन" : "No items match your search & filter"}
             </h3>
             <p style={{ fontSize: "13.5px", color: "#7E756C", margin: "0 0 16px 0", lineHeight: 1.5 }}>
-              Try searching with different keywords, brand names, or reset your category filter to explore all available products.
+              {language === "ne"
+                ? "कृपया फरक शब्द, ब्रान्ड वा वर्ग छानेर पुन: प्रयास गर्नुहोस्।"
+                : "Try searching with different keywords, brand names, or reset your category filter to explore all available products."}
             </p>
             <div style={{ display: "flex", justifyContent: "center" }}>
               <button
@@ -570,7 +605,7 @@ export const StoreCatalogue: React.FC = () => {
                   boxShadow: "0 2px 6px rgba(232, 111, 28, 0.25)",
                 }}
               >
-                Reset Search & Filters
+                {language === "ne" ? "खोज र फिल्टर रिसेट गर्नुहोस्" : "Reset Search & Filters"}
               </button>
             </div>
           </div>

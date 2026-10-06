@@ -16,6 +16,7 @@ import {
   PlumberIcon,
   FurnitureIcon,
 } from "@/components/ServiceIcons";
+import { useLanguage } from "../../context/LanguageContext";
 
 interface PopularServiceItem {
   title: string;
@@ -90,6 +91,12 @@ const SERVICES: PopularServiceItem[] = [
 ];
 
 export const PopularServices: React.FC = () => {
+  const { t, language } = useLanguage();
+
+  const serviceTitle = (key: string, fallback: string) => {
+    return t(key) || fallback;
+  };
+
   return (
     <section
       style={{
@@ -121,7 +128,7 @@ export const PopularServices: React.FC = () => {
               margin: 0,
             }}
           >
-            Popular Services
+            {t("services.popularTitle")}
           </h2>
           <Link
             href="/services"
@@ -138,7 +145,7 @@ export const PopularServices: React.FC = () => {
             onMouseEnter={(e) => (e.currentTarget.style.color = "#E86F1C")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "#4B443B")}
           >
-            <span>View All Services</span>
+            <span>{t("services.viewAll")}</span>
             <svg
               width="14"
               height="14"
@@ -238,7 +245,29 @@ export const PopularServices: React.FC = () => {
                   wordBreak: "break-word",
                 }}
               >
-                {service.title}
+                {service.title === "AC Repair"
+                  ? t("services.ac")
+                  : service.title === "Washing Machine Repair"
+                  ? t("services.washingMachine")
+                  : service.title === "TV Repair"
+                  ? t("services.tv")
+                  : service.title === "Camera Repair"
+                  ? t("services.camera")
+                  : service.title === "Laptop Repair"
+                  ? t("services.laptop")
+                  : service.title === "Plumber"
+                  ? t("services.plumber")
+                  : service.title === "Furniture"
+                  ? t("services.furniture")
+                  : service.title === "CCTV Installation"
+                  ? t("services.cctv")
+                  : service.title === "Mobile Repair"
+                  ? t("services.mobile")
+                  : service.title === "Home Appliance"
+                  ? t("services.appliance")
+                  : service.title === "TV Wall Mounting"
+                  ? t("services.wallMount")
+                  : t("services.other")}
               </span>
             </Link>
           ))}

@@ -25,14 +25,17 @@ import {
   MessageSquare,
   Bell,
   Headphones,
+  Languages,
 } from "lucide-react";
 import { SHOP_PRODUCTS } from "@/data/shopProducts";
+import { useLanguage } from "../context/LanguageContext";
 
 export const Navbar: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
   const { user, role, firebaseUser, signOut } = useAuth();
   const { totalCount } = useCart();
+  const { language, setLanguage, toggleLanguage, t } = useLanguage();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -427,6 +430,38 @@ export const Navbar: React.FC = () => {
               </>
             )}
 
+            {/* Language Switcher (EN / नेपाली) */}
+            <button
+              type="button"
+              onClick={toggleLanguage}
+              title={language === "en" ? "नेपाली भाषामा हेर्नुहोस्" : "Switch to English"}
+              aria-label="Switch Language"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                height: "34px",
+                padding: "0 10px",
+                borderRadius: "8px",
+                background: language === "ne" ? "#FEF3C7" : "#F7F5F0",
+                border: language === "ne" ? "1px solid #FDE68A" : "1px solid #E6E1D8",
+                color: language === "ne" ? "#92400E" : "#4B443B",
+                fontSize: "12.5px",
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#E86F1C";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = language === "ne" ? "#FDE68A" : "#E6E1D8";
+              }}
+            >
+              <Languages size={15} color={language === "ne" ? "#D97706" : "#E86F1C"} />
+              <span>{language === "en" ? "नेपाली" : "English"}</span>
+            </button>
+
             {/* Shopping Cart */}
             <Link
               href="/cart"
@@ -750,7 +785,7 @@ export const Navbar: React.FC = () => {
                 }
               }}
             >
-              Home
+              {t("nav.home")}
             </Link>
 
             <Link
@@ -779,7 +814,7 @@ export const Navbar: React.FC = () => {
                 }
               }}
             >
-              Repair
+              {t("nav.repair")}
             </Link>
 
             <Link
@@ -808,7 +843,7 @@ export const Navbar: React.FC = () => {
                 }
               }}
             >
-              Shop
+              {t("nav.shop")}
             </Link>
 
             <Link
@@ -837,7 +872,7 @@ export const Navbar: React.FC = () => {
                 }
               }}
             >
-              Pre-owned
+              {t("nav.preowned")}
             </Link>
           </nav>
 
@@ -851,9 +886,9 @@ export const Navbar: React.FC = () => {
               color: "#8E877F",
             }}
           >
-            <span>Janakpur Center</span>
+            <span>{t("nav.janakpurCenter")}</span>
             <span style={{ color: "#D1C7BD" }}>•</span>
-            <span style={{ color: "#E86F1C", fontWeight: 600 }}>Free Physical Inspection</span>
+            <span style={{ color: "#E86F1C", fontWeight: 600 }}>{t("nav.freeInspection")}</span>
           </div>
         </div>
       </div>

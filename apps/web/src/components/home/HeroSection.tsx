@@ -3,9 +3,11 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "../../context/LanguageContext";
 
 export const HeroSection: React.FC = () => {
   const router = useRouter();
+  const { t, language } = useLanguage();
   const [heroSearchQuery, setHeroSearchQuery] = useState("");
 
   const handleHeroSearch = (e: React.FormEvent) => {
@@ -81,23 +83,29 @@ export const HeroSection: React.FC = () => {
             {/* Main Headline */}
             <h1
               style={{
-                fontSize: "clamp(30px, 3.6vw, 44px)",
+                fontSize: "clamp(28px, 3.5vw, 42px)",
                 fontWeight: 800,
-                lineHeight: 1.15,
+                lineHeight: 1.2,
                 letterSpacing: "-0.025em",
                 color: "#FFFFFF",
                 margin: "0 0 14px 0",
               }}
             >
-              Get It Done with{" "}
-              <span
-                style={{
-                  color: "#FF7A1A",
-                  display: "inline-block",
-                }}
-              >
-                Sharma Video Care
-              </span>
+              {language === "ne" ? (
+                <>
+                  <span style={{ color: "#FF7A1A", display: "inline-block" }}>
+                    शर्मा भिडियो केयर
+                  </span>
+                  {" "}— विश्वसनीय मर्मत र प्रामाणिक गियर
+                </>
+              ) : (
+                <>
+                  Get It Done with{" "}
+                  <span style={{ color: "#FF7A1A", display: "inline-block" }}>
+                    Sharma Video Care
+                  </span>
+                </>
+              )}
             </h1>
 
             {/* Subtitle */}
@@ -110,8 +118,7 @@ export const HeroSection: React.FC = () => {
                 maxWidth: "480px",
               }}
             >
-              Repairs, new &amp; used products, custom requests and more — all
-              in one place.
+              {t("hero.sub")}
             </p>
 
             {/* Hero Search Bar */}
@@ -147,7 +154,7 @@ export const HeroSection: React.FC = () => {
                 type="text"
                 value={heroSearchQuery}
                 onChange={(e) => setHeroSearchQuery(e.target.value)}
-                placeholder="What do you need help with?"
+                placeholder={language === "ne" ? "के सेवा वा उपकरण खोज्दै हुनुहुन्छ?" : "What do you need help with?"}
                 style={{
                   flex: 1,
                   border: "none",

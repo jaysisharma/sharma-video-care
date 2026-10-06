@@ -7,6 +7,7 @@ import { collection, addDoc, doc, getDoc, updateDoc, increment } from "firebase/
 import { db } from "../../lib/firebase";
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
+import { useLanguage } from "../../context/LanguageContext";
 import { PaymentMethod, OrderRecord, OrderStatus } from "@sharmavideocare/shared";
 import { ArrowLeft, CheckCircle2, Shield, Truck, AlertCircle, Building2, Banknote } from "lucide-react";
 
@@ -14,6 +15,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { items, subtotal, clearCart } = useCart();
+  const { language } = useLanguage();
 
   const deliveryFee = 150;
   const orderTotal = subtotal + deliveryFee;
@@ -34,9 +36,9 @@ export default function CheckoutPage() {
   if (items.length === 0) {
     return (
       <div className="container" style={{ padding: "4rem 1.25rem", textAlign: "center" }}>
-        <h2>Your cart is empty</h2>
+        <h2>{language === "ne" ? "तपाईंको कार्ट खाली छ" : "Your cart is empty"}</h2>
         <Link href="/shop" className="btn btn-secondary" style={{ marginTop: "1rem" }}>
-          Return to Shop
+          {language === "ne" ? "स्टोरमा फर्कनुहोस्" : "Return to Shop"}
         </Link>
       </div>
     );
@@ -147,11 +149,11 @@ export default function CheckoutPage() {
         href="/cart"
         style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", color: "var(--color-muted)", fontSize: "0.9rem", marginBottom: "1.5rem" }}
       >
-        <ArrowLeft size={16} /> Back to Cart
+        <ArrowLeft size={16} /> {language === "ne" ? "कार्टमा फर्कनुहोस्" : "Back to Cart"}
       </Link>
 
       <h1 style={{ fontSize: "2rem", fontWeight: 800, marginBottom: "2rem" }}>
-        Secure Checkout
+        {language === "ne" ? "सुरक्षित चेकआउट" : "Secure Checkout"}
       </h1>
 
       {error && (
@@ -167,12 +169,15 @@ export default function CheckoutPage() {
             {/* 1. Delivery Address */}
             <div className="card" style={{ marginBottom: "2rem" }}>
               <h3 style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "1.2rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Truck size={18} color="var(--color-primary)" /> 1. Shipping Address (Nationwide Nepal)
+                <Truck size={18} color="var(--color-primary)" />{" "}
+                {language === "ne" ? "१. डेलिभरी ठेगाना (नेपालभर)" : "1. Shipping Address (Nationwide Nepal)"}
               </h3>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                 <div className="form-group">
-                  <label className="form-label">Recipient Full Name *</label>
+                  <label className="form-label">
+                    {language === "ne" ? "प्रापकको पूरा नाम *" : "Recipient Full Name *"}
+                  </label>
                   <input
                     type="text"
                     className="form-input"
@@ -359,7 +364,7 @@ export default function CheckoutPage() {
           {/* Right Summary Sidebar */}
           <div className="card" style={{ position: "sticky", top: "90px" }}>
             <h3 style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "1rem", borderBottom: "1px solid var(--color-border)", paddingBottom: "0.5rem" }}>
-              Order Review
+              {language === "ne" ? "अर्डर समीक्षा" : "Order Review"}
             </h3>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1.25rem", fontSize: "0.85rem", maxHeight: "200px", overflowY: "auto" }}>
@@ -375,15 +380,17 @@ export default function CheckoutPage() {
 
             <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: "0.9rem", marginBottom: "1.5rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ color: "var(--color-muted)" }}>Subtotal</span>
+                <span style={{ color: "var(--color-muted)" }}>{language === "ne" ? "उप-योग" : "Subtotal"}</span>
                 <span>Rs. {subtotal.toLocaleString("en-IN")}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ color: "var(--color-muted)" }}>Courier Delivery (Nepal)</span>
+                <span style={{ color: "var(--color-muted)" }}>
+                  {language === "ne" ? "नेपालभर सुरक्षित डेलिभरी" : "Courier Delivery (Nepal)"}
+                </span>
                 <span>Rs. {deliveryFee.toLocaleString("en-IN")}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "1.15rem", fontWeight: 800, borderTop: "1px solid var(--color-border)", paddingTop: "0.5rem" }}>
-                <span>Total Due</span>
+                <span>{language === "ne" ? "कुल रकम" : "Total Due"}</span>
                 <span>Rs. {orderTotal.toLocaleString("en-IN")}</span>
               </div>
             </div>
@@ -394,7 +401,9 @@ export default function CheckoutPage() {
               disabled={submitting}
               style={{ width: "100%", padding: "0.85rem", fontSize: "1rem" }}
             >
-              {submitting ? "Placing Order..." : "Confirm & Place Order"}
+              {submitting
+                ? (language === "ne" ? "अर्डर पठाइँदैछ..." : "Placing Order...")
+                : (language === "ne" ? "अर्डर निश्चित गर्नुहोस्" : "Confirm & Place Order")}
             </button>
           </div>
         </div>

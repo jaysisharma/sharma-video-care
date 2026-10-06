@@ -3,8 +3,10 @@
 import React from "react";
 import Link from "next/link";
 import { Logo } from "./Logo";
+import { useLanguage } from "@/context/LanguageContext";
 
 export const Footer: React.FC = () => {
+  const { language, t } = useLanguage();
   return (
     <footer
       style={{
@@ -45,10 +47,9 @@ export const Footer: React.FC = () => {
                 lineHeight: 1.6,
               }}
             >
-              Nepal&apos;s trusted destination for professional electronics repair,
-              appliance servicing, genuine tech equipment, and certified pre-owned
-              devices with physical diagnosis in Janakpur and nationwide doorstep
-              delivery.
+              {language === "ne"
+                ? "जनकपुरधाम र नेपालभर इलेक्ट्रोनिक्स मर्मत, सक्कली क्यामेरा/प्रविधि र प्रमाणित सेकेन्ड-ह्यान्डका लागि भरपर्दो गन्तव्य। निःशुल्क परीक्षण र सुरक्षित डेलिभरी।"
+                : "Nepal's trusted destination for professional electronics repair, appliance servicing, genuine tech equipment, and certified pre-owned devices with physical diagnosis in Janakpur and nationwide doorstep delivery."}
             </p>
             <div
               style={{
@@ -62,13 +63,27 @@ export const Footer: React.FC = () => {
                 textTransform: "uppercase",
               }}
             >
-              <span>REPAIR</span>
-              <span>•</span>
-              <span>BUY</span>
-              <span>•</span>
-              <span>INSTALL</span>
-              <span>•</span>
-              <span>MAINTAIN</span>
+              {language === "ne" ? (
+                <>
+                  <span>मर्मत</span>
+                  <span>•</span>
+                  <span>खरिद</span>
+                  <span>•</span>
+                  <span>जडान</span>
+                  <span>•</span>
+                  <span>सम्भार</span>
+                </>
+              ) : (
+                <>
+                  <span>REPAIR</span>
+                  <span>•</span>
+                  <span>BUY</span>
+                  <span>•</span>
+                  <span>INSTALL</span>
+                  <span>•</span>
+                  <span>MAINTAIN</span>
+                </>
+              )}
             </div>
           </div>
 
@@ -84,7 +99,7 @@ export const Footer: React.FC = () => {
                 letterSpacing: "0.06em",
               }}
             >
-              Repair Services
+              {language === "ne" ? "मर्मत सेवाहरू" : "Repair Services"}
             </h4>
             <ul
               style={{
@@ -99,13 +114,34 @@ export const Footer: React.FC = () => {
               }}
             >
               {[
-                { label: "AC Repair & Gas Refill", href: "/services/request?service=ac" },
-                { label: "Washing Machine Maintenance", href: "/services/request?service=washing_machine" },
-                { label: "TV Panel & Board Repair", href: "/services/request?service=tv" },
-                { label: "DSLR Camera & Lens Service", href: "/services/request?service=camera" },
-                { label: "MacBook & Laptop Servicing", href: "/services/request?service=laptop" },
-                { label: "CCTV Installation & Setup", href: "/services/request?service=cctv" },
-                { label: "Custom Repair Inquiry", href: "/services/custom" },
+                {
+                  label: language === "ne" ? "एसी मर्मत र ग्यास रिफिल" : "AC Repair & Gas Refill",
+                  href: "/services/request?service=ac",
+                },
+                {
+                  label: language === "ne" ? "वाशिङ मेसिन मर्मत सम्भार" : "Washing Machine Maintenance",
+                  href: "/services/request?service=washing_machine",
+                },
+                {
+                  label: language === "ne" ? "टिभी प्यानल र बोर्ड मर्मत" : "TV Panel & Board Repair",
+                  href: "/services/request?service=tv",
+                },
+                {
+                  label: language === "ne" ? "क्यामेरा र लेन्स सेवा" : "DSLR Camera & Lens Service",
+                  href: "/services/request?service=camera",
+                },
+                {
+                  label: language === "ne" ? "म्याकबुक र ल्यापटप सर्भिसिङ" : "MacBook & Laptop Servicing",
+                  href: "/services/request?service=laptop",
+                },
+                {
+                  label: language === "ne" ? "सीसीटिभी क्यामेरा जडान" : "CCTV Installation & Setup",
+                  href: "/services/request?service=cctv",
+                },
+                {
+                  label: language === "ne" ? "अन्य विशेष मर्मत सोधपुछ" : "Custom Repair Inquiry",
+                  href: "/services/custom",
+                },
               ].map((item, idx) => (
                 <li key={idx}>
                   <Link
@@ -137,7 +173,7 @@ export const Footer: React.FC = () => {
                 letterSpacing: "0.06em",
               }}
             >
-              Shop &amp; Equipment
+              {language === "ne" ? "स्टोर र उपकरणहरू" : "Shop & Equipment"}
             </h4>
             <ul
               style={{
@@ -152,12 +188,30 @@ export const Footer: React.FC = () => {
               }}
             >
               {[
-                { label: "Cameras & Photography Equipment", href: "/shop" },
-                { label: "Laptops & Computing", href: "/shop" },
-                { label: "Surveillance & Security Systems", href: "/shop" },
-                { label: "Certified Pre-Owned Devices", href: "/used" },
-                { label: "CCTV & Security Solutions", href: "/services" },
-                { label: "Track Active Order", href: "/orders" },
+                {
+                  label: language === "ne" ? "क्यामेरा र फोटोग्राफी उपकरण" : "Cameras & Photography Equipment",
+                  href: "/shop",
+                },
+                {
+                  label: language === "ne" ? "ल्यापटप र कम्प्युटिङ" : "Laptops & Computing",
+                  href: "/shop",
+                },
+                {
+                  label: language === "ne" ? "सुरक्षा र निगरानी प्रणाली" : "Surveillance & Security Systems",
+                  href: "/shop",
+                },
+                {
+                  label: language === "ne" ? "प्रमाणित सेकेन्ड-ह्यान्ड डिभाइस" : "Certified Pre-Owned Devices",
+                  href: "/used",
+                },
+                {
+                  label: language === "ne" ? "सीसीटिभी र सेक्युरिटी सोलुसन" : "CCTV & Security Solutions",
+                  href: "/services",
+                },
+                {
+                  label: language === "ne" ? "सक्रिय अर्डर ट्र्याक गर्नुहोस्" : "Track Active Order",
+                  href: "/orders",
+                },
               ].map((item, idx) => (
                 <li key={idx}>
                   <Link
@@ -189,7 +243,7 @@ export const Footer: React.FC = () => {
                 letterSpacing: "0.06em",
               }}
             >
-              Janakpur Center &amp; Support
+              {language === "ne" ? "जनकपुरधाम केन्द्र र सहयोग" : "Janakpur Center & Support"}
             </h4>
             <div
               style={{
@@ -201,21 +255,31 @@ export const Footer: React.FC = () => {
               }}
             >
               <div>
-                <div style={{ color: "#E0DBD2", fontWeight: 650 }}>Service Center:</div>
+                <div style={{ color: "#E0DBD2", fontWeight: 650 }}>
+                  {language === "ne" ? "सेवा केन्द्र:" : "Service Center:"}
+                </div>
                 <div style={{ fontSize: "0.82rem", color: "#8E8880", marginTop: "2px" }}>
-                  Station Road (Near Ramanand Chowk), Janakpurdham, Nepal
+                  {language === "ne"
+                    ? "स्टेसन रोड (रामानन्द चोक नजिक), जनकपुरधाम, नेपाल"
+                    : "Station Road (Near Ramanand Chowk), Janakpurdham, Nepal"}
                 </div>
               </div>
 
               <div>
-                <div style={{ color: "#E0DBD2", fontWeight: 650 }}>Working Hours:</div>
+                <div style={{ color: "#E0DBD2", fontWeight: 650 }}>
+                  {language === "ne" ? "खुल्ने समय:" : "Working Hours:"}
+                </div>
                 <div style={{ fontSize: "0.82rem", color: "#8E8880", marginTop: "2px" }}>
-                  Sun – Fri: 9:00 AM – 7:30 PM (Sat: On-call)
+                  {language === "ne"
+                    ? "आइत – शुक्र: बिहान ९:०० – साँझ ७:३० (शनि: अन-कल)"
+                    : "Sun – Fri: 9:00 AM – 7:30 PM (Sat: On-call)"}
                 </div>
               </div>
 
               <div>
-                <div style={{ color: "#E0DBD2", fontWeight: 650 }}>Hotlines:</div>
+                <div style={{ color: "#E0DBD2", fontWeight: 650 }}>
+                  {language === "ne" ? "हटलाइन सम्पर्क:" : "Hotlines:"}
+                </div>
                 <div style={{ fontSize: "0.82rem", color: "#FF7A1A", marginTop: "2px", fontWeight: 700 }}>
                   +977 985-4022200 / 041-520000
                 </div>
@@ -243,7 +307,7 @@ export const Footer: React.FC = () => {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.312.045-.694.067-1.111-.067-.27-.086-.606-.217-1.042-.406-1.849-.803-3.048-2.67-3.14-2.793-.093-.123-.745-.992-.745-1.892s.472-1.343.64-1.528c.168-.186.368-.232.49-.232.123 0 .246.002.353.007.113.006.262-.043.411.314.154.37.525 1.282.571 1.376.046.094.077.203.015.326-.062.123-.092.2-.184.308-.093.108-.194.24-.277.323-.093.093-.19.195-.082.38.108.185.48 1.155 1.34 1.92 1.107.986 2.04 1.293 2.33 1.416.29.123.46.108.63-.077.17-.185.733-.852.928-1.144.195-.292.39-.244.656-.145.267.098 1.696.8 1.988.946.292.146.487.218.558.341.071.123.071.714-.073 1.119z" />
                   </svg>
-                  <span>WhatsApp Live Support</span>
+                  <span>{language === "ne" ? "ह्वाट्सएप प्रत्यक्ष सहयोग" : "WhatsApp Live Support"}</span>
                 </a>
               </div>
             </div>
@@ -265,7 +329,11 @@ export const Footer: React.FC = () => {
           }}
         >
           <div>
-            © {new Date().getFullYear()} <strong>Sharma Video Care</strong>. All rights reserved. Station Road, Janakpurdham, Nepal.
+            © {new Date().getFullYear()}{" "}
+            <strong>{language === "ne" ? "शर्मा भिडियो केयर" : "Sharma Video Care"}</strong>.{" "}
+            {language === "ne"
+              ? "सर्वाधिकार सुरक्षित। स्टेसन रोड, जनकपुरधाम, नेपाल।"
+              : "All rights reserved. Station Road, Janakpurdham, Nepal."}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "1.2rem", flexWrap: "wrap" }}>
@@ -275,7 +343,7 @@ export const Footer: React.FC = () => {
               onMouseEnter={(e) => (e.currentTarget.style.color = "#E2DDD6")}
               onMouseLeave={(e) => (e.currentTarget.style.color = "#7E776F")}
             >
-              Terms of Service
+              {language === "ne" ? "सेवाका सर्तहरू" : "Terms of Service"}
             </Link>
             <span>•</span>
             <Link
@@ -284,7 +352,7 @@ export const Footer: React.FC = () => {
               onMouseEnter={(e) => (e.currentTarget.style.color = "#E2DDD6")}
               onMouseLeave={(e) => (e.currentTarget.style.color = "#7E776F")}
             >
-              Privacy Policy
+              {language === "ne" ? "गोपनीयता नीति" : "Privacy Policy"}
             </Link>
             <span>•</span>
             <Link
@@ -293,7 +361,7 @@ export const Footer: React.FC = () => {
               onMouseEnter={(e) => (e.currentTarget.style.color = "#E2DDD6")}
               onMouseLeave={(e) => (e.currentTarget.style.color = "#7E776F")}
             >
-              90-Day Warranty Guidelines
+              {language === "ne" ? "९०-दिने वारेन्टी नियमहरू" : "90-Day Warranty Guidelines"}
             </Link>
           </div>
         </div>
