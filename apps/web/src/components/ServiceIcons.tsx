@@ -120,3 +120,34 @@ export function OtherServicesIcon({ size = 36, className = "" }: { size?: number
     </svg>
   );
 }
+
+export function PlumberIcon({ size = 36, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+      {/* Pipe Wrench / Water Tap Concept */}
+      <rect x="8" y="14" width="22" height="6" rx="2" fill="#E2DDD5" stroke="#2D2A26" strokeWidth="2.2" />
+      <rect x="16" y="20" width="6" height="18" rx="1.5" fill="#E2DDD5" stroke="#2D2A26" strokeWidth="2.2" />
+      <circle cx="34" cy="17" r="5" fill="#E86F1C" stroke="#2D2A26" strokeWidth="2" />
+      <path d="M19 38C19 40 21 42 24 42C27 42 29 40 29 38" stroke="#3B82F6" strokeWidth="2.4" strokeLinecap="round" />
+      <path d="M24 42V45" stroke="#3B82F6" strokeWidth="2.2" strokeLinecap="round" />
+      <circle cx="24" cy="46" r="1.5" fill="#3B82F6" />
+    </svg>
+  );
+}
+
+export function FurnitureIcon({ size = 36, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+      {/* Sofa / Armchair Carpentry Concept */}
+      <rect x="10" y="20" width="28" height="16" rx="3" fill="#F0EDE7" stroke="#2D2A26" strokeWidth="2.2" />
+      <rect x="6" y="24" width="6" height="12" rx="2" fill="#D6D0C5" stroke="#2D2A26" strokeWidth="2" />
+      <rect x="36" y="24" width="6" height="12" rx="2" fill="#D6D0C5" stroke="#2D2A26" strokeWidth="2" />
+      <line x1="12" y1="36" x2="10" y2="42" stroke="#2D2A26" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="36" y1="36" x2="38" y2="42" stroke="#2D2A26" strokeWidth="2.5" strokeLinecap="round" />
+      <circle cx="24" cy="27" r="2.5" fill="#E86F1C" />
+      <line x1="14" y1="14" x2="34" y2="14" stroke="#2D2A26" strokeWidth="2" strokeLinecap="round" />
+      <line x1="24" y1="14" x2="24" y2="20" stroke="#2D2A26" strokeWidth="2" />
+    </svg>
+  );
+}
+

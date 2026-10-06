@@ -13,9 +13,18 @@ import {
   HomeApplianceIcon,
   TVWallMountIcon,
   OtherServicesIcon,
+  PlumberIcon,
+  FurnitureIcon,
 } from "@/components/ServiceIcons";
 
-const SERVICES = [
+interface PopularServiceItem {
+  title: string;
+  icon: React.ReactNode;
+  href: string;
+  isComingSoon?: boolean;
+}
+
+const SERVICES: PopularServiceItem[] = [
   {
     title: "AC Repair",
     icon: <ACIcon size={40} />,
@@ -40,6 +49,18 @@ const SERVICES = [
     title: "Laptop Repair",
     icon: <LaptopIcon size={40} />,
     href: "/services/request?service=laptop",
+  },
+  {
+    title: "Plumber",
+    icon: <PlumberIcon size={40} />,
+    href: "/services#plumbing",
+    isComingSoon: true,
+  },
+  {
+    title: "Furniture",
+    icon: <FurnitureIcon size={40} />,
+    href: "/services#furniture",
+    isComingSoon: true,
   },
   {
     title: "CCTV Installation",
@@ -147,6 +168,7 @@ export const PopularServices: React.FC = () => {
               key={index}
               href={service.href}
               style={{
+                position: "relative",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
@@ -175,6 +197,26 @@ export const PopularServices: React.FC = () => {
                   "0 1px 3px rgba(0, 0, 0, 0.02)";
               }}
             >
+              {service.isComingSoon && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: "6px",
+                    right: "6px",
+                    background: "#FEF3C7",
+                    color: "#92400E",
+                    fontSize: "9px",
+                    fontWeight: 750,
+                    padding: "2px 5px",
+                    borderRadius: "4px",
+                    letterSpacing: "0.02em",
+                    border: "1px solid #FDE68A",
+                  }}
+                >
+                  SOON
+                </span>
+              )}
+
               <div
                 style={{
                   height: "44px",
