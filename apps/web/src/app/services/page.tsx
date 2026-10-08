@@ -196,6 +196,49 @@ export default function ServicesPage() {
               <span>90-Day Warranty Repair</span>
             </div>
           </div>
+
+          {/* Interactive Cost Estimator CTA */}
+          <div
+            style={{
+              marginTop: "1.25rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Link
+              href="/estimator"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "9px 18px",
+                background: "linear-gradient(135deg, #FFF7F2 0%, #FEEFE6 100%)",
+                border: "1px solid #FED7AA",
+                borderRadius: "12px",
+                color: "#181512",
+                textDecoration: "none",
+                fontSize: "13px",
+                fontWeight: 700,
+                boxShadow: "0 2px 8px rgba(232, 111, 28, 0.08)",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.boxShadow = "0 6px 16px rgba(232, 111, 28, 0.15)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 2px 8px rgba(232, 111, 28, 0.08)";
+              }}
+            >
+              <span>🧮</span>
+              <span>
+                Want to know repair costs before visiting? Try our <strong>Instant Cost Estimator</strong>
+              </span>
+              <span style={{ color: "#E86F1C", fontWeight: 800 }}>→</span>
+            </Link>
+          </div>
         </div>
 
         {/* Filter Chips & Search Bar */}

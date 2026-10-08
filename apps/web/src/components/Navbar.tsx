@@ -26,6 +26,7 @@ import {
   Bell,
   Headphones,
   Languages,
+  Calculator,
 } from "lucide-react";
 import { SHOP_PRODUCTS } from "@/data/shopProducts";
 import { useLanguage } from "../context/LanguageContext";
@@ -92,6 +93,7 @@ export const Navbar: React.FC = () => {
 
   const isHome = pathname === "/" || pathname === "";
   const isRepair = pathname.startsWith("/services");
+  const isEstimator = pathname.startsWith("/estimator");
   const isShop = pathname.startsWith("/shop");
   const isPreowned = pathname.startsWith("/used");
 
@@ -817,6 +819,51 @@ export const Navbar: React.FC = () => {
               {t("nav.repair")}
             </Link>
 
+            {/* Cost Estimator */}
+            <Link
+              href="/estimator"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                height: "44px",
+                padding: "0 0.85rem",
+                fontSize: "0.88rem",
+                fontWeight: isEstimator ? 700 : 500,
+                color: isEstimator ? "#E86F1C" : "#374151",
+                background: "transparent",
+                borderBottom: isEstimator ? "2.5px solid #E86F1C" : "2.5px solid transparent",
+                textDecoration: "none",
+                transition: "color 0.15s ease, border-color 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "#E86F1C";
+                if (!isEstimator) e.currentTarget.style.borderBottomColor = "#FED7AA";
+              }}
+              onMouseLeave={(e) => {
+                if (!isEstimator) {
+                  e.currentTarget.style.color = "#374151";
+                  e.currentTarget.style.borderBottomColor = "transparent";
+                }
+              }}
+            >
+              <span>{t("nav.estimator")}</span>
+              <span
+                style={{
+                  fontSize: "9.5px",
+                  fontWeight: 750,
+                  background: "#FFF3EA",
+                  color: "#E86F1C",
+                  border: "1px solid #FED7AA",
+                  padding: "1px 5px",
+                  borderRadius: "999px",
+                  letterSpacing: "0.02em",
+                }}
+              >
+                FREE
+              </span>
+            </Link>
+
             <Link
               href="/shop"
               style={{
@@ -1000,9 +1047,44 @@ export const Navbar: React.FC = () => {
             >
               <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
                 <Wrench size={18} strokeWidth={1.8} color={isRepair ? "#E86F1C" : "#6B7280"} />
-                <span>Repair</span>
+                <span>{t("nav.repair")}</span>
               </div>
               <ArrowRight size={14} color="#9CA3AF" />
+            </Link>
+
+            <Link
+              href="/estimator"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "0.65rem 0.75rem",
+                borderRadius: "4px",
+                textDecoration: "none",
+                fontSize: "0.92rem",
+                fontWeight: isEstimator ? 700 : 500,
+                color: isEstimator ? "#E86F1C" : "#1F2937",
+                background: "transparent",
+                borderLeft: isEstimator ? "3px solid #E86F1C" : "3px solid transparent",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <Calculator size={18} strokeWidth={1.8} color={isEstimator ? "#E86F1C" : "#6B7280"} />
+                <span>{t("nav.estimator")}</span>
+              </div>
+              <span
+                style={{
+                  fontSize: "9.5px",
+                  fontWeight: 750,
+                  background: "#FFF3EA",
+                  color: "#E86F1C",
+                  border: "1px solid #FED7AA",
+                  padding: "1px 6px",
+                  borderRadius: "999px",
+                }}
+              >
+                FREE
+              </span>
             </Link>
 
             <Link

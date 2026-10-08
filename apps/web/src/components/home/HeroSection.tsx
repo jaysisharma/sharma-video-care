@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "../../context/LanguageContext";
@@ -189,6 +190,45 @@ export const HeroSection: React.FC = () => {
                 Search
               </button>
             </form>
+
+            {/* Quick Estimator CTA Link */}
+            <div style={{ marginBottom: "26px", maxWidth: "480px" }}>
+              <Link
+                href="/estimator"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  background: "rgba(255, 255, 255, 0.08)",
+                  border: "1px solid rgba(255, 255, 255, 0.16)",
+                  padding: "6px 14px",
+                  borderRadius: "999px",
+                  color: "#E2DDD6",
+                  fontSize: "12.5px",
+                  fontWeight: 650,
+                  textDecoration: "none",
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(232, 111, 28, 0.2)";
+                  e.currentTarget.style.borderColor = "#E86F1C";
+                  e.currentTarget.style.color = "#FF8C38";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)";
+                  e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.16)";
+                  e.currentTarget.style.color = "#E2DDD6";
+                }}
+              >
+                <span>💡</span>
+                <span>
+                  {language === "ne"
+                    ? "मर्मत खर्च कति लाग्ला? तत्काल अनलाइन अनुमान गर्नुहोस्"
+                    : "Not sure how much repair costs? Calculate instant estimate"}
+                </span>
+                <span style={{ color: "#FF7A1A", fontWeight: 800 }}>→</span>
+              </Link>
+            </div>
 
             {/* Trust Badges */}
             <div

@@ -14,11 +14,18 @@ function ServiceRequestContent() {
   const searchParams = useSearchParams();
   const categorySlug = searchParams.get("category") || "general";
   const categoryTitle = searchParams.get("title") || "General Equipment";
+  const initialModel = searchParams.get("model") || "";
+  const initialSymptom = searchParams.get("symptom") || "";
+  const initialEstimate = searchParams.get("estimate") || "";
 
   const { user } = useAuth();
 
-  const [deviceModel, setDeviceModel] = useState("");
-  const [description, setDescription] = useState("");
+  const [deviceModel, setDeviceModel] = useState(initialModel);
+  const [description, setDescription] = useState(
+    initialSymptom
+      ? `${initialSymptom}${initialEstimate ? `\n[Online Pre-Estimate: ${initialEstimate}]` : ""}`
+      : ""
+  );
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [recipientName, setRecipientName] = useState(user?.name || "");
   const [phone, setPhone] = useState(user?.phone || "");
@@ -134,6 +141,40 @@ function ServiceRequestContent() {
           Submit your equipment details. Our Janakpur technician will inspect the hardware and provide an exact quotation.
         </p>
       </div>
+
+      {/* Online Estimator Pre-fill Banner */}
+      {initialEstimate && (
+        <div
+          style={{
+            marginBottom: "1.25rem",
+            background: "#FFF8F2",
+            border: "1px solid #FED7AA",
+            borderRadius: "10px",
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "10px",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: "11.5px", fontWeight: 700, color: "#E86F1C", textTransform: "uppercase" }}>
+              Pre-calculated Online Estimate
+            </div>
+            <div style={{ fontSize: "15px", fontWeight: 800, color: "#181512" }}>
+              {initialModel ? `${initialModel} • ` : ""}
+              {initialEstimate}
+            </div>
+          </div>
+          <Link
+            href="/estimator"
+            style={{ fontSize: "12px", color: "#E86F1C", fontWeight: 700, textDecoration: "none" }}
+          >
+            Change Estimate ↺
+          </Link>
+        </div>
+      )}
 
       {/* Pricing Rule Confirmation Banner */}
       <div className="notice-box" style={{ marginBottom: "2rem" }}>
