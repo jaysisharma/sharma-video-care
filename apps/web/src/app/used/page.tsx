@@ -188,7 +188,7 @@ export default function UsedProductsPage() {
 
           <div style={{ display: "flex", gap: "8px" }}>
             <Link
-              href="/contact"
+              href="/trade-in"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -202,7 +202,7 @@ export default function UsedProductsPage() {
                 textDecoration: "none",
               }}
             >
-              <span>Trade-In Valuation</span>
+              <span>Instant Trade-In Valuation</span>
               <ArrowRight size={13} />
             </Link>
           </div>
@@ -211,6 +211,83 @@ export default function UsedProductsPage() {
 
       {/* Main Content Area */}
       <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "1.5rem 1.25rem 4rem 1.25rem" }}>
+        {/* Trade-In Upgrade Callout Banner */}
+        <div
+          style={{
+            background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+            borderRadius: "12px",
+            padding: "16px 20px",
+            marginBottom: "1.25rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "14px",
+            border: "1px solid #334155",
+            color: "#FFFFFF",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            <div
+              style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "10px",
+                background: "rgba(232, 111, 28, 0.15)",
+                border: "1px solid rgba(232, 111, 28, 0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#E86F1C",
+                flexShrink: 0,
+              }}
+            >
+              <RotateCcw size={20} />
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "#FFFFFF" }}>
+                  Selling or Upgrading your Camera Gear?
+                </span>
+                <span
+                  style={{
+                    background: "#059669",
+                    color: "#FFFFFF",
+                    fontSize: "10.5px",
+                    fontWeight: 750,
+                    padding: "2px 8px",
+                    borderRadius: "999px",
+                  }}
+                >
+                  +10% Extra Store Credit
+                </span>
+              </div>
+              <p style={{ margin: "3px 0 0 0", fontSize: "0.82rem", color: "#94A3B8" }}>
+                Calculate instant buyout values for cameras, lenses, laptops &amp; drones. Janakpur counter drop-off or insured courier pickup across Nepal.
+              </p>
+            </div>
+          </div>
+
+          <Link
+            href="/trade-in"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              background: "#E86F1C",
+              color: "#FFFFFF",
+              padding: "9px 18px",
+              borderRadius: "8px",
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span>Trade-In Calculator</span>
+            <ArrowRight size={14} />
+          </Link>
+        </div>
         {/* Compact Filters Toolbar */}
         <div
           style={{

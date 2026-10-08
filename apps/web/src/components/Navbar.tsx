@@ -27,6 +27,7 @@ import {
   Headphones,
   Languages,
   Calculator,
+  RefreshCcw,
 } from "lucide-react";
 import { SHOP_PRODUCTS } from "@/data/shopProducts";
 import { useLanguage } from "../context/LanguageContext";
@@ -96,6 +97,7 @@ export const Navbar: React.FC = () => {
   const isEstimator = pathname.startsWith("/estimator");
   const isShop = pathname.startsWith("/shop");
   const isPreowned = pathname.startsWith("/used");
+  const isTradeIn = pathname.startsWith("/trade-in");
 
   const isLoggedIn = !!(user || firebaseUser);
   const displayName = isLoggedIn
@@ -921,6 +923,50 @@ export const Navbar: React.FC = () => {
             >
               {t("nav.preowned")}
             </Link>
+
+            <Link
+              href="/trade-in"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                height: "44px",
+                padding: "0 0.85rem",
+                fontSize: "0.88rem",
+                fontWeight: isTradeIn ? 700 : 500,
+                color: isTradeIn ? "#E86F1C" : "#374151",
+                background: "transparent",
+                borderBottom: isTradeIn ? "2.5px solid #E86F1C" : "2.5px solid transparent",
+                textDecoration: "none",
+                transition: "color 0.15s ease, border-color 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "#E86F1C";
+                if (!isTradeIn) e.currentTarget.style.borderBottomColor = "#FED7AA";
+              }}
+              onMouseLeave={(e) => {
+                if (!isTradeIn) {
+                  e.currentTarget.style.color = "#374151";
+                  e.currentTarget.style.borderBottomColor = "transparent";
+                }
+              }}
+            >
+              <span>{t("nav.tradeIn")}</span>
+              <span
+                style={{
+                  fontSize: "9px",
+                  fontWeight: 800,
+                  background: "#ECFDF5",
+                  color: "#059669",
+                  border: "1px solid #A7F3D0",
+                  padding: "1px 5px",
+                  borderRadius: "999px",
+                  letterSpacing: "0.02em",
+                }}
+              >
+                +10%
+              </span>
+            </Link>
           </nav>
 
           {/* Right Sub-text / Guarantee Note */}
@@ -1131,6 +1177,41 @@ export const Navbar: React.FC = () => {
                 <span>Pre-owned</span>
               </div>
               <ArrowRight size={14} color="#9CA3AF" />
+            </Link>
+
+            <Link
+              href="/trade-in"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "0.65rem 0.75rem",
+                borderRadius: "4px",
+                textDecoration: "none",
+                fontSize: "0.92rem",
+                fontWeight: isTradeIn ? 700 : 500,
+                color: isTradeIn ? "#E86F1C" : "#1F2937",
+                background: "transparent",
+                borderLeft: isTradeIn ? "3px solid #E86F1C" : "3px solid transparent",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <RefreshCcw size={18} strokeWidth={1.8} color={isTradeIn ? "#E86F1C" : "#6B7280"} />
+                <span>{t("nav.tradeIn")}</span>
+              </div>
+              <span
+                style={{
+                  fontSize: "9.5px",
+                  fontWeight: 750,
+                  background: "#ECFDF5",
+                  color: "#059669",
+                  border: "1px solid #A7F3D0",
+                  padding: "1px 6px",
+                  borderRadius: "999px",
+                }}
+              >
+                +10%
+              </span>
             </Link>
 
             <div style={{ height: "1px", background: "#F3F4F6", margin: "0.5rem 0" }} />

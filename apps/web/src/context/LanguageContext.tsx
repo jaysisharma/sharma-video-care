@@ -16,6 +16,7 @@ const DICTIONARY: Record<string, { en: string; ne: string }> = {
   "nav.home": { en: "Home", ne: "गृहपृष्ठ" },
   "nav.repair": { en: "Repair", ne: "मर्मत सेवा" },
   "nav.estimator": { en: "Cost Estimator", ne: "खर्च अनुमान" },
+  "nav.tradeIn": { en: "Sell / Trade-In", ne: "सामान बेच्नुहोस्" },
   "nav.shop": { en: "Shop", ne: "पसल" },
   "nav.preowned": { en: "Pre-owned", ne: "प्रमाणित सेकेन्ड-ह्यान्ड" },
   "nav.searchPlaceholder": { en: "Search cameras, lenses, drones, repairs...", ne: "क्यामेरा, लेन्स, ड्रोन, मर्मत खोज्नुहोस्..." },
