@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../theme_tokens.dart';
 import '../state/app_state.dart';
+import '../widgets/auth/auth_widgets.dart';
+import '../widgets/svc_snackbar.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   final AppState appState;
@@ -24,162 +27,102 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     super.dispose();
   }
 
-  void _submit() async {
+  void _showSent() {
+    setState(() => _sent = true);
+    SvcSnackbar.success(context, tr('auth.resetSentToast'));
+  }
+
+  Future<void> _submit() async {
+    if (_loading) return;
+    FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _loading = true);
-    await widget.appState.resetPassword(_emailController.text.trim());
-    if (mounted) {
-      setState(() {
-        _loading = false;
-        _sent = true;
-      });
+    try {
+      await widget.appState.resetPassword(_emailController.text.trim());
+      if (mounted) _showSent();
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      // Never reveal whether an account exists for this email.
+      if (e.code == 'user-not-found') {
+        _showSent();
+      } else {
+        SvcSnackbar.error(context, authErrorMessage(e.code));
+      }
+    } catch (e) {
+      debugPrint('Password reset failed: $e');
+      if (mounted) SvcSnackbar.error(context, tr('auth.err.generic'));
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reset Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-        backgroundColor: SvcColors.surface,
-        elevation: 0.5,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Column(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: SvcColors.primary,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Text(
-                      'S',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 24),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Reset Your Password',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: SvcColors.ink),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Enter your account email and we will dispatch a recovery link.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, color: SvcColors.muted),
-                  ),
-                ],
+    return AuthScaffold(
+      titleKey: 'auth.title.forgot',
+      subtitleKey: _sent ? null : 'auth.subtitle.forgot',
+      bodyBuilder: (context) => _sent ? _buildSent() : _buildForm(),
+      footerBuilder: _sent
+          ? null
+          : (context) => AuthSwitchPrompt(
+                prompt: tr('auth.rememberPassword'),
+                linkLabel: tr('auth.signIn'),
+                onPressed: () => Navigator.of(context).pop(),
               ),
-            ),
-            const SizedBox(height: 28),
+    );
+  }
 
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: SvcColors.surface,
-                border: Border.all(color: SvcColors.border),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: _sent
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Icon(Icons.check_circle_outline, color: SvcColors.success, size: 48),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Recovery Link Sent!',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: SvcColors.ink),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Instructions to reset your password have been sent to ${_emailController.text.trim()}.',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 13, color: SvcColors.muted, height: 1.4),
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: SvcColors.surface,
-                            foregroundColor: SvcColors.ink,
-                            side: const BorderSide(color: SvcColors.border),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                            elevation: 0,
-                          ),
-                          child: const Text('Back to Sign In', style: TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    )
-                  : Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const Text(
-                            'Email Address',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: SvcColors.ink),
-                          ),
-                          const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: InputDecoration(
-                              hintText: 'name@example.com',
-                              prefixIcon: const Icon(Icons.email_outlined, size: 20, color: SvcColors.muted),
-                              filled: true,
-                              fillColor: SvcColors.canvas,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: const BorderSide(color: SvcColors.border),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: const BorderSide(color: SvcColors.border),
-                              ),
-                            ),
-                            validator: (val) {
-                              if (val == null || val.trim().isEmpty) return 'Please enter your email';
-                              if (!val.contains('@')) return 'Please enter a valid email';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 20),
-                          ElevatedButton(
-                            onPressed: _loading ? null : _submit,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: SvcColors.primary,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                              elevation: 0,
-                            ),
-                            child: _loading
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                  )
-                                : const Text('Send Recovery Link', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                          ),
-                        ],
-                      ),
-                    ),
-            ),
-          ],
-        ),
+  Widget _buildForm() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AuthTextField(
+            label: tr('auth.email'),
+            controller: _emailController,
+            hint: 'name@example.com',
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.send,
+            autofillHints: const [AutofillHints.email],
+            autocorrect: false,
+            validator: validateEmail,
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: 24),
+          AuthPrimaryButton(label: tr('auth.sendReset'), loading: _loading, onPressed: _submit),
+        ],
       ),
+    );
+  }
+
+  Widget _buildSent() {
+    return Column(
+      children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: const BoxDecoration(color: Color(0xFFE3F4EA), shape: BoxShape.circle),
+          child: const Icon(Icons.mark_email_read_outlined, color: SvcColors.success, size: 28),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          tr('auth.resetSentTitle'),
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: SvcColors.ink),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          tr('auth.resetSentBody', {'email': _emailController.text.trim()}),
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 14, color: SvcColors.inkSecondary, height: 1.45),
+        ),
+        const SizedBox(height: 22),
+        SizedBox(
+          width: double.infinity,
+          child: AuthPrimaryButton(label: tr('auth.backToLogin'), onPressed: () => Navigator.of(context).pop()),
+        ),
+      ],
     );
   }
 }

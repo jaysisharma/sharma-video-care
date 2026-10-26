@@ -1,46 +1,48 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    // Media is served from Cloudinary; Firebase Storage is locked down to admins
+    // (catalog images) and per-user folders.
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Public read for public product and service images
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.get('role', '') == 'admin' ||
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    function isImageUpload() {
+      return request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+    }
+
     match /products/{allPaths=**} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isAdmin() && isImageUpload();
     }
 
     match /services/{allPaths=**} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isAdmin() && isImageUpload();
     }
 
     match /used-products/{allPaths=**} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isAdmin() && isImageUpload();
     }
 
-    // User / Customer uploads (service requests, payments, profiles)
     match /users/{userId}/{allPaths=**} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+      allow write: if isAuthenticated() && request.auth.uid == userId && isImageUpload();
     }
 
-    match /service-requests/{requestId}/{allPaths=**} {
-      allow read, write: if isAuthenticated();
-    }
-
-    match /inspections/{inspectionId}/{allPaths=**} {
-      allow read, write: if isAuthenticated();
-    }
-
-    match /payments/{paymentId}/{allPaths=**} {
-      allow read, write: if isAuthenticated();
-    }
-
-    match /chat/{conversationId}/{allPaths=**} {
-      allow read, write: if isAuthenticated();
+    // Everything else (service-requests, inspections, payments, chat, ...) is admin-only
+    // until an upload flow with ownership metadata exists.
+    match /{allPaths=**} {
+      allow read, write: if isAdmin();
     }
   }
 }

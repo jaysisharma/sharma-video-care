@@ -1,42 +1,92 @@
 /**
- * Cloudinary Media Helper for Sharma Video Care
- * Cloud Name: esmfahf0
+ * Cloudinary Media Client Utilities
+ * Provides seamless client-side uploading and dynamic CDN transformation.
  */
 
-export const CLOUDINARY_CONFIG = {
-  cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "esmfahf0",
-  apiKey: process.env.CLOUDINARY_API_KEY || "774116671947288",
-  uploadUrl: `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "esmfahf0"}/image/upload`,
-};
+import { signInAnonymously } from "firebase/auth";
+import { auth } from "./firebase";
+
+export interface CloudinaryUploadResult {
+  url: string;
+  secure_url: string;
+  public_id: string;
+  format?: string;
+  width?: number;
+  height?: number;
+}
+
+/** Firebase ID token for the /api/upload route; guests are signed in anonymously. */
+async function getUploadToken(): Promise<string> {
+  const user = auth.currentUser ?? (await signInAnonymously(auth)).user;
+  return user.getIdToken();
+}
 
 /**
- * Upload an image file or base64 data to Cloudinary
- * @param file File, Blob, or base64 string
- * @param uploadPreset Optional Cloudinary unsigned upload preset name
+ * Upload a file, blob, or base64 data URI to Cloudinary via the /api/upload endpoint.
+ * Returns the secure HTTPS URL of the hosted asset.
  */
 export async function uploadToCloudinary(
   file: File | Blob | string,
-  uploadPreset: string = "ml_default"
-): Promise<{ url: string; secure_url: string; public_id: string }> {
-  const formData = new FormData();
+  folder = "video_care"
+): Promise<string> {
+  let response: Response;
+  const authorization = `Bearer ${await getUploadToken()}`;
 
   if (typeof file === "string") {
-    formData.append("file", file);
+    response = await fetch("/api/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: authorization },
+      body: JSON.stringify({ file, folder }),
+    });
   } else {
+    const formData = new FormData();
     formData.append("file", file);
+    formData.append("folder", folder);
+    response = await fetch("/api/upload", {
+      method: "POST",
+      headers: { Authorization: authorization },
+      body: formData,
+    });
   }
 
-  formData.append("upload_preset", uploadPreset);
+  const data = await response.json();
 
-  const res = await fetch(CLOUDINARY_CONFIG.uploadUrl, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`Cloudinary upload failed: ${errorText}`);
+  if (!response.ok || !data.secure_url) {
+    throw new Error(data.error || "Failed to upload image to Cloudinary");
   }
 
-  return res.json();
+  return data.secure_url;
+}
+
+/**
+ * Injects dynamic Cloudinary transformations (auto-format, auto-quality, resize)
+ * into any Cloudinary URL.
+ */
+export function getOptimizedCloudinaryUrl(
+  url: string,
+  options: { width?: number; height?: number; quality?: string; crop?: string } = {}
+): string {
+  if (!url || !url.includes("res.cloudinary.com")) {
+    return url;
+  }
+
+  const { width, height, quality = "auto", crop = "limit" } = options;
+  const transforms: string[] = [`f_auto`, `q_${quality}`];
+
+  if (width) transforms.push(`w_${width}`);
+  if (height) transforms.push(`h_${height}`);
+  if (width || height) transforms.push(`c_${crop}`);
+
+  const transformString = transforms.join(",");
+
+  // Cloudinary URL format: https://res.cloudinary.com/<cloud>/image/upload/<version>/<public_id>
+  const uploadIndex = url.indexOf("/upload/");
+  if (uploadIndex === -1) return url;
+
+  return (
+    url.slice(0, uploadIndex + 8) +
+    transformString +
+    "/" +
+    url.slice(uploadIndex + 8)
+  );
 }

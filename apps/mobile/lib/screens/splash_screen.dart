@@ -1,9 +1,9 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../theme_tokens.dart';
 import '../state/app_state.dart';
 import '../main.dart';
-import 'login_screen.dart';
+import '../widgets/brand_logo.dart';
 
 class SplashScreen extends StatefulWidget {
   final AppState appState;
@@ -18,14 +18,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   late AnimationController _animController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
-  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: const Duration(milliseconds: 800),
     );
 
     _fadeAnimation = CurvedAnimation(
@@ -33,7 +32,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       curve: Curves.easeOut,
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.92, end: 1.0).animate(
+    _scaleAnimation = Tween<double>(begin: 0.95, end: 1.0).animate(
       CurvedAnimation(
         parent: _animController,
         curve: Curves.easeOutCubic,
@@ -42,29 +41,28 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     _animController.forward();
 
-    // Natural, swift entrance: check if user is authenticated
-    _timer = Timer(const Duration(milliseconds: 1200), () {
-      if (mounted) {
-        final Widget destination = widget.appState.isAuthenticated
-            ? MainNavigationScreen(appState: widget.appState)
-            : LoginScreen(appState: widget.appState);
-
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (_, __, ___) => destination,
-            transitionsBuilder: (_, animation, __, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            transitionDuration: const Duration(milliseconds: 300),
-          ),
-        );
-      }
+    // Show the brand for a moment, and give the background profile check a short
+    // window so a blocked or changed-role account is resolved before the first screen.
+    Future.wait([
+      Future<void>.delayed(const Duration(milliseconds: 1400)),
+      widget.appState.waitForSession(timeout: const Duration(seconds: 3)),
+    ]).then((_) {
+      if (!mounted) return;
+      // Guests land on Home; signing in is optional and lives in the Account tab.
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => MainNavigationScreen(appState: widget.appState),
+          transitionsBuilder: (_, animation, __, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 350),
+        ),
+      );
     });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     _animController.dispose();
     super.dispose();
   }
@@ -72,98 +70,82 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: SvcColors.canvas,
-      body: SafeArea(
-        child: SizedBox.expand(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const SizedBox(height: 48),
-
-              // Center Brand Hero
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: ScaleTransition(
-                  scale: _scaleAnimation,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Camera & Optical Craft Brand Emblem
-                      Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          color: SvcColors.primary,
-                          borderRadius: BorderRadius.circular(18),
-                          boxShadow: [
-                            BoxShadow(
-                              color: SvcColors.primary.withValues(alpha: 0.25),
-                              blurRadius: 20,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: Container(
-                            width: 52,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.35),
-                                width: 2,
-                              ),
-                            ),
-                            child: const Icon(
-                              Icons.camera_alt_rounded,
-                              color: Colors.white,
-                              size: 28,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Brand Name
-                      Text(
-                        'Sharma Video Care',
-                        style: SvcTypography.headingTight.copyWith(
-                          fontSize: 23,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-
-                      // Single, Clean Core Promise
-                      Text(
-                        'Repair  •  Buy  •  Source  •  Install',
-                        style: SvcTypography.caption.copyWith(
-                          fontSize: 12,
-                          letterSpacing: 0.4,
-                          color: SvcColors.muted,
-                        ),
+      backgroundColor: Colors.white,
+      body: Center(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: ScaleTransition(
+            scale: _scaleAnimation,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Circular Precision Aperture Emblem
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFF8FAFC),
+                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x080F172A),
+                        blurRadius: 24,
+                        offset: Offset(0, 10),
                       ),
                     ],
                   ),
+                  child: const SvcBrandLogo.markOnly(size: 88),
                 ),
-              ),
+                const SizedBox(height: 28),
 
-              // Minimal, Understated Footer
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: Text(
-                    'Janakpur  •  Nationwide Nepal Delivery',
-                    style: SvcTypography.caption.copyWith(
-                      fontSize: 11,
-                      color: SvcColors.muted.withValues(alpha: 0.75),
-                      letterSpacing: 0.2,
-                    ),
+                // Brand Name — Clean, Timeless Swiss Typography
+                Text(
+                  'QUICKYSEWA',
+                  style: GoogleFonts.inter(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2.4,
+                    color: SvcColors.ink,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 10),
+
+                // Warm Accent Division Bar
+                Container(
+                  width: 28,
+                  height: 2.5,
+                  decoration: BoxDecoration(
+                    color: SvcColors.primary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Sub-title
+                Text(
+                  'CAMERA CRAFT & ELECTRONICS LAB',
+                  style: GoogleFonts.inter(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.6,
+                    color: SvcColors.muted,
+                  ),
+                ),
+                const SizedBox(height: 6),
+
+                // Heritage Tag
+                Text(
+                  'EST. 2004  •  JANAKPUR',
+                  style: GoogleFonts.inter(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1.2,
+                    color: const Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

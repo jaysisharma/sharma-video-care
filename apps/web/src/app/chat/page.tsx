@@ -1,3 +1,4 @@
+import { uploadToCloudinary } from "../../lib/cloudinary";
 "use client";
 
 import React, { useEffect, useState, useRef, Suspense } from "react";
@@ -15,15 +16,18 @@ import {
 } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { useAuth } from "../../context/AuthContext";
+import { RequireRole } from "../../components/RequireRole";
 import { Conversation, ChatMessage, UserRole } from "@sharmavideocare/shared";
-import { MessageSquare, Send, Paperclip, CheckCheck, Clock, User, ShieldAlert, Hammer } from "lucide-react";
+import { MessageSquare, Send, Paperclip, Image as ImageIcon, X, Upload, CheckCheck, Clock, User, ShieldAlert, Hammer } from "lucide-react";
+import { useSnackbar } from "../../context/SnackbarContext";
 
 function ChatContent() {
   const searchParams = useSearchParams();
   const contextIdParam = searchParams.get("contextId");
 
   const { user, role } = useAuth();
-  const userId = user?.id || "cust-janakpur-01";
+  const snackbar = useSnackbar();
+  const userId = user?.id || "";
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -32,6 +36,23 @@ function ChatContent() {
   const [attachmentUrl, setAttachmentUrl] = useState("");
   const [showAttachmentInput, setShowAttachmentInput] = useState(false);
   const [sending, setSending] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+
+  const handleChatFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAttachment(true);
+    try {
+      const url = await uploadToCloudinary(file, "video_care/chat");
+      setAttachmentUrl(url);
+      snackbar.success("Image uploaded to Cloudinary!");
+    } catch (err: any) {
+      console.error("Chat image upload failed:", err);
+      snackbar.error(err.message || "Failed to upload image.");
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -124,6 +145,7 @@ function ChatContent() {
       setShowAttachmentInput(false);
     } catch (err) {
       console.error("Message send failed:", err);
+      snackbar.error("Message not sent. Check your connection and try again.");
     } finally {
       setSending(false);
     }
@@ -246,14 +268,36 @@ function ChatContent() {
 
                         {m.attachmentUrls && m.attachmentUrls.length > 0 && (
                           <div style={{ marginTop: "0.5rem" }}>
-                            <a
-                              href={m.attachmentUrls[0]}
-                              target="_blank"
-                              rel="noreferrer"
-                              style={{ color: isMe ? "#FFE3CC" : "var(--color-primary)", textDecoration: "underline", fontSize: "0.82rem" }}
-                            >
-                              📎 View Attachment ↗
-                            </a>
+                            {m.attachmentUrls[0].match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i) || m.attachmentUrls[0].includes("res.cloudinary.com") ? (
+                              <a
+                                href={m.attachmentUrls[0]}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{ display: "block", marginTop: "4px" }}
+                              >
+                                <img
+                                  src={m.attachmentUrls[0]}
+                                  alt="Attachment"
+                                  style={{
+                                    maxWidth: "220px",
+                                    maxHeight: "180px",
+                                    borderRadius: "8px",
+                                    border: isMe ? "1px solid rgba(255,255,255,0.2)" : "1px solid var(--color-border)",
+                                    objectFit: "cover",
+                                    display: "block",
+                                  }}
+                                />
+                              </a>
+                            ) : (
+                              <a
+                                href={m.attachmentUrls[0]}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{ color: isMe ? "#FFE3CC" : "var(--color-primary)", textDecoration: "underline", fontSize: "0.82rem" }}
+                              >
+                                📎 View Attachment ↗
+                              </a>
+                            )}
                           </div>
                         )}
                       </div>
@@ -270,6 +314,47 @@ function ChatContent() {
 
             {/* Input Bar */}
             <form onSubmit={handleSendMessage} style={{ borderTop: "1px solid var(--color-border)", padding: "1rem", background: "#FAF8F5" }}>
+              {/* Attachment Preview Box */}
+              {(attachmentUrl || uploadingAttachment) && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "6px 10px",
+                    background: "#FFFFFF",
+                    borderRadius: "8px",
+                    border: "1px solid var(--color-border)",
+                    marginBottom: "8px",
+                    width: "fit-content",
+                    maxWidth: "100%",
+                  }}
+                >
+                  {uploadingAttachment ? (
+                    <span style={{ fontSize: "12px", color: "var(--color-primary)" }}>Uploading image to Cloudinary...</span>
+                  ) : (
+                    <>
+                      {attachmentUrl.includes("res.cloudinary.com") ? (
+                        <img src={attachmentUrl} alt="Preview" style={{ width: "32px", height: "32px", objectFit: "cover", borderRadius: "4px" }} />
+                      ) : (
+                        <Paperclip size={16} color="var(--color-primary)" />
+                      )}
+                      <span style={{ fontSize: "12px", color: "var(--color-ink)", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {attachmentUrl}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setAttachmentUrl("")}
+                        style={{ border: "none", background: "none", cursor: "pointer", padding: "2px", color: "var(--color-muted)" }}
+                        title="Remove attachment"
+                      >
+                        <X size={14} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
               {showAttachmentInput && (
                 <div style={{ marginBottom: "0.75rem" }}>
                   <input
@@ -282,12 +367,30 @@ function ChatContent() {
                 </div>
               )}
 
-              <div style={{ display: "flex", gap: "0.5rem" }}>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                {/* Cloudinary Image Picker */}
+                <label
+                  className="btn btn-secondary btn-sm"
+                  style={{ cursor: "pointer", margin: 0, padding: "0.45rem 0.6rem" }}
+                  title="Upload Image to Cloudinary"
+                >
+                  <ImageIcon size={16} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    disabled={uploadingAttachment}
+                    onChange={handleChatFileUpload}
+                  />
+                </label>
+
+                {/* Paste URL toggle */}
                 <button
                   type="button"
                   onClick={() => setShowAttachmentInput(!showAttachmentInput)}
                   className="btn btn-secondary btn-sm"
-                  title="Attach link"
+                  title="Attach link manually"
+                  style={{ padding: "0.45rem 0.6rem" }}
                 >
                   <Paperclip size={16} />
                 </button>
@@ -303,7 +406,7 @@ function ChatContent() {
                 <button
                   type="submit"
                   className="btn btn-primary btn-sm"
-                  disabled={sending || (!newMessageText.trim() && !attachmentUrl.trim())}
+                  disabled={sending || uploadingAttachment || (!newMessageText.trim() && !attachmentUrl.trim())}
                 >
                   <Send size={16} />
                 </button>
@@ -322,8 +425,10 @@ function ChatContent() {
 
 export default function ChatPage() {
   return (
+    <RequireRole>
     <Suspense fallback={<div className="container" style={{ padding: "4rem 0", textAlign: "center" }}>Loading chat...</div>}>
       <ChatContent />
     </Suspense>
+    </RequireRole>
   );
 }

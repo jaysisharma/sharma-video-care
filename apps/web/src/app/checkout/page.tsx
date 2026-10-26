@@ -3,13 +3,14 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, addDoc, doc, getDoc, updateDoc, increment } from "firebase/firestore";
+import { collection, addDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { PaymentMethod, OrderRecord, OrderStatus } from "@sharmavideocare/shared";
 import { ArrowLeft, CheckCircle2, Shield, Truck, AlertCircle, Building2, Banknote } from "lucide-react";
+import { useSnackbar } from "../../context/SnackbarContext";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -31,7 +32,7 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("COD");
   const [agreedToPolicy, setAgreedToPolicy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const snackbar = useSnackbar();
 
   if (items.length === 0) {
     return (
@@ -47,15 +48,14 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agreedToPolicy) {
-      setError("Please review and agree to the delivery, return, and warranty terms.");
+      snackbar.warning("Please review and agree to the delivery, return, and warranty terms.");
       return;
     }
 
     setSubmitting(true);
-    setError("");
 
     try {
-      const customerId = user ? user.id : "cust-janakpur-01";
+      const customerId = user ? user.id : `guest-${crypto.randomUUID()}`;
       const customerName = user ? user.name : recipientName;
 
       const orderData: Omit<OrderRecord, "id"> = {
@@ -87,57 +87,14 @@ export default function CheckoutPage() {
 
       const docRef = await addDoc(collection(db, "orders"), orderData);
 
-      // Decrement stock in Firestore for each item in the order (Inventory Sync)
-      for (const item of items) {
-        try {
-          if (item.productType === "USED") {
-            const usedRef = doc(db, "usedProducts", item.productId);
-            const usedSnap = await getDoc(usedRef);
-            if (usedSnap.exists()) {
-              await updateDoc(usedRef, {
-                status: "SOLD",
-                availability: "SOLD",
-                updatedAt: new Date().toISOString(),
-              });
-            }
-          } else {
-            const prodRef = doc(db, "products", item.productId);
-            const prodSnap = await getDoc(prodRef);
-            if (prodSnap.exists()) {
-              const currentStock = prodSnap.data().stockQuantity || 0;
-              const newStock = Math.max(0, currentStock - item.quantity);
-              await updateDoc(prodRef, {
-                stockQuantity: newStock,
-                availabilityType: newStock === 0 ? "OUT_OF_STOCK" : "IN_STOCK",
-                updatedAt: new Date().toISOString(),
-              });
-            }
-          }
-        } catch (stockErr) {
-          console.warn(`Could not sync inventory for product ${item.productId}:`, stockErr);
-        }
-      }
-
-      // Create linked chat for order updates
-      await addDoc(collection(db, "conversations"), {
-        customerId,
-        customerName,
-        contextType: "ORDER",
-        contextId: docRef.id,
-        contextTitle: `Order #${docRef.id.slice(0, 8)} (${items.length} items)`,
-        participantIds: [customerId, "admin-svc-01"],
-        status: "OPEN",
-        lastMessageText: `New order placed for Rs. ${orderTotal.toLocaleString("en-IN")}`,
-        lastMessageAt: new Date().toISOString(),
-        unreadCountCustomer: 0,
-        unreadCountStaff: 1,
-      });
+      // Inventory, price verification and the order chat are handled server-side
+      // by the onOrderCreated Cloud Function.
 
       clearCart();
       router.push(`/orders/success/${docRef.id}`);
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || "Failed to process order. Please try again.");
+      snackbar.error("Failed to place your order. Please check your details and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -156,11 +113,6 @@ export default function CheckoutPage() {
         {language === "ne" ? "सुरक्षित चेकआउट" : "Secure Checkout"}
       </h1>
 
-      {error && (
-        <div style={{ padding: "0.85rem 1rem", background: "#FDF0F0", border: "1px solid var(--color-danger)", color: "var(--color-danger)", borderRadius: "var(--radius-sm)", marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <AlertCircle size={18} /> {error}
-        </div>
-      )}
 
       <form onSubmit={handlePlaceOrder}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "2.5rem", alignItems: "start" }}>
@@ -329,7 +281,7 @@ export default function CheckoutPage() {
                       <Building2 size={18} /> Bank Transfer (Direct Deposit / Mobile Banking)
                     </div>
                     <p style={{ fontSize: "0.85rem", color: "var(--color-muted)", marginTop: "0.25rem" }}>
-                      Transfer directly to the Sharma Video Care corporate account. You will submit your deposit voucher/screenshot for admin verification.
+                      Transfer directly to the QuickySewa corporate account. You will submit your deposit voucher/screenshot for admin verification.
                     </p>
                   </div>
                 </label>
@@ -355,7 +307,7 @@ export default function CheckoutPage() {
                   required
                 />
                 <span style={{ color: "var(--color-ink)", lineHeight: 1.5 }}>
-                  I confirm my order and agree to the <strong>Sharma Video Care Terms of Service</strong>, <strong>Nationwide Courier Delivery Policy</strong>, and <strong>Product-Specific Warranty & Return Terms</strong> under Nepal Electronic Commerce Act 2081 guidelines.
+                  I confirm my order and agree to the <strong>QuickySewa Terms of Service</strong>, <strong>Nationwide Courier Delivery Policy</strong>, and <strong>Product-Specific Warranty & Return Terms</strong> under Nepal Electronic Commerce Act 2081 guidelines.
                 </span>
               </label>
             </div>

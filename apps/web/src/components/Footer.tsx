@@ -330,7 +330,7 @@ export const Footer: React.FC = () => {
         >
           <div>
             © {new Date().getFullYear()}{" "}
-            <strong>{language === "ne" ? "शर्मा भिडियो केयर" : "Sharma Video Care"}</strong>.{" "}
+            <strong>{language === "ne" ? "क्विकीसेवा" : "QuickySewa"}</strong>.{" "}
             {language === "ne"
               ? "सर्वाधिकार सुरक्षित। स्टेसन रोड, जनकपुरधाम, नेपाल।"
               : "All rights reserved. Station Road, Janakpurdham, Nepal."}

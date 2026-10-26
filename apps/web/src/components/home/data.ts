@@ -92,7 +92,7 @@ export const HOME_PRODUCTS: ProductItem[] = [
     id: "prod-6",
     title: "Nikon D850 DSLR Camera + 24-120mm Kit",
     subtitle: "45.7MP FX Sensor • 4K UHD • Certified Used",
-    trustNote: "Lab Tested • 90-Day Sharma Care Warranty",
+    trustNote: "Lab Tested • 90-Day QuickySewa Warranty",
     category: "Cameras",
     brand: "Nikon",
     price: 215000,

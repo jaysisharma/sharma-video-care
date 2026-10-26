@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import '../widgets/product_image.dart';
+import '../models/models.dart';
 import '../theme_tokens.dart';
 import '../state/app_state.dart';
 
 import '../services/firestore_service.dart';
+import '../widgets/svc_snackbar.dart';
+import '../widgets/payment_proof_sheet.dart';
+import '../utils/format.dart';
 
 class CartScreen extends StatefulWidget {
   final AppState appState;
@@ -18,7 +23,7 @@ class _CartScreenState extends State<CartScreen> {
   final _recipientController = TextEditingController();
   final _phoneController = TextEditingController();
   final _cityController = TextEditingController(text: 'Janakpur');
-  final _streetController = TextEditingController(text: 'Station Road, Near Railway Station');
+  final _streetController = TextEditingController();
   bool _agreedToTerms = false;
   bool _placingOrder = false;
 
@@ -39,6 +44,49 @@ class _CartScreenState extends State<CartScreen> {
     _cityController.dispose();
     _streetController.dispose();
     super.dispose();
+  }
+
+  Future<void> _showOrderPlaced({required String orderId, required String customerId, required int total}) async {
+    final isBank = _paymentMethod == 'BANK_TRANSFER';
+    final payNow = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: SvcColors.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        icon: const Icon(Icons.check_circle_rounded, color: SvcColors.success, size: 36),
+        title: const Text('Order placed', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: Text(
+          isBank
+              ? 'Pay ${formatRs(total)} by bank transfer, then submit the transaction number so we can confirm your order.'
+              : 'Pay ${formatRs(total)} in cash when your order is delivered. We will call you to confirm.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 14, color: SvcColors.inkSecondary, height: 1.45),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          if (isBank)
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              style: TextButton.styleFrom(foregroundColor: SvcColors.ink),
+              child: const Text('Pay later'),
+            ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, isBank),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: SvcColors.primary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text(isBank ? 'Pay now' : 'Done', style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (payNow == true && mounted) {
+      await showPaymentProofSheet(context, orderId: orderId, customerId: customerId, amount: total);
+    }
   }
 
   void _showCheckoutSheet() {
@@ -116,8 +164,8 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                       RadioListTile<String>(
                         value: 'BANK_TRANSFER',
-                        title: Text('Bank Transfer (Rastriya Banijya Bank)', style: TextStyle(fontSize: 13)),
-                        subtitle: Text('Submit transaction voucher / slip after placing order', style: TextStyle(fontSize: 11)),
+                        title: Text('Bank transfer', style: TextStyle(fontSize: 13)),
+                        subtitle: Text('Pay to our bank account, then submit the transaction number', style: TextStyle(fontSize: 11)),
                       ),
                     ],
                   ),
@@ -128,7 +176,7 @@ class _CartScreenState extends State<CartScreen> {
                   value: _agreedToTerms,
                   onChanged: (val) => setSheetState(() => _agreedToTerms = val ?? false),
                   title: const Text(
-                    'I accept the delivery, return, and warranty terms under Nepal Electronic Commerce Act 2081.',
+                    'I accept the delivery, return and warranty terms.',
                     style: TextStyle(fontSize: 11, height: 1.3),
                   ),
                   controlAffinity: ListTileControlAffinity.leading,
@@ -144,9 +192,7 @@ class _CartScreenState extends State<CartScreen> {
                         ? null
                         : () async {
                             if (!_agreedToTerms) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Please accept delivery and warranty terms.')),
-                              );
+                              SvcSnackbar.show(context, 'Please accept delivery and warranty terms.', type: SnackType.warning);
                               return;
                             }
 
@@ -155,9 +201,10 @@ class _CartScreenState extends State<CartScreen> {
                             final messenger = ScaffoldMessenger.of(context);
                             try {
                               final user = widget.appState.currentUser;
-                              final customerId = user?.id ?? 'guest-${DateTime.now().millisecondsSinceEpoch}';
+                              final customerId = user?.id ?? FirestoreService.newGuestId();
 
-                              await FirestoreService().createOrder(
+                              final total = widget.appState.cartTotal;
+                              final orderId = await FirestoreService().createOrder(
                                 customerId: customerId,
                                 customerName: _recipientController.text.trim(),
                                 customerPhone: _phoneController.text.trim(),
@@ -170,42 +217,29 @@ class _CartScreenState extends State<CartScreen> {
                                 total: widget.appState.cartTotal,
                               );
 
+                              widget.appState.addNotification(
+                                NotificationItemModel(
+                                  id: 'notif-order-$orderId',
+                                  title: 'Order placed',
+                                  message: _paymentMethod == 'COD'
+                                      ? 'Pay ${formatRs(total)} in cash when your order is delivered.'
+                                      : 'Pay ${formatRs(total)} by bank transfer and submit the transaction number.',
+                                  category: 'orders',
+                                  timestamp: DateTime.now(),
+                                  isRead: false,
+                                  actionRoute: 'shop',
+                                  actionLabel: 'View orders',
+                                ),
+                              );
+
                               setSheetState(() => _placingOrder = false);
                               nav.pop(); // Close sheet
                               widget.appState.clearCart();
-
-                              nav.push(
-                                MaterialPageRoute(
-                                  builder: (ctx) => AlertDialog(
-                                    title: const Row(
-                                      children: [
-                                        Icon(Icons.check_circle, color: SvcColors.success),
-                                        SizedBox(width: 8),
-                                        Text('Order Placed!'),
-                                      ],
-                                    ),
-                                    content: Text(
-                                      _paymentMethod == 'COD'
-                                          ? 'Order received! Our courier partner will collect cash upon doorstep inspection in ${_cityController.text}.'
-                                          : 'Order received! Please deposit to Rastriya Banijya Bank (A/C: 10400019283748, Janakpur) and submit voucher in your account.',
-                                      style: const TextStyle(fontSize: 13),
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () {
-                                          Navigator.pop(ctx);
-                                        },
-                                        child: const Text('Done', style: TextStyle(fontWeight: FontWeight.bold)),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
+                              if (!mounted) return;
+                              await _showOrderPlaced(orderId: orderId, customerId: customerId, total: total);
                             } catch (e) {
                               setSheetState(() => _placingOrder = false);
-                              messenger.showSnackBar(
-                                SnackBar(backgroundColor: SvcColors.danger, content: Text('Error placing order: $e')),
-                              );
+                              SvcSnackbar.showOn(messenger, 'Couldn\'t place your order. Please try again.', type: SnackType.error);
                             }
                           },
                     style: ElevatedButton.styleFrom(
@@ -214,7 +248,7 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                     child: _placingOrder
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : Text('Confirm Order (Rs. ${widget.appState.cartTotal})', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        : Text('Place order · ${formatRs(widget.appState.cartTotal)}', style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -288,7 +322,7 @@ class _CartScreenState extends State<CartScreen> {
                           child: item.imageUrl != null
                               ? ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(item.imageUrl!, fit: BoxFit.cover),
+                                  child: SvcProductImage(source: item.imageUrl, placeholderIconSize: 22),
                                 )
                               : const Icon(Icons.camera_alt, color: SvcColors.muted),
                         ),

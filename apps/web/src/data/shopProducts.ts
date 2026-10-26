@@ -276,7 +276,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     images: ["/images/products/hikvision_cctv.jpg"],
     availabilityType: "IN_STOCK",
     stockQuantity: 15,
-    warrantyInfo: "2 Years Replacement Warranty with Sharma Video Care Technical Setup",
+    warrantyInfo: "2 Years Replacement Warranty with QuickySewa Technical Setup",
     returnPolicyInfo: "7-day replacement for hardware faults",
     description:
       "Professional 8 Megapixel (4K) high performance surveillance camera. Features EXIR 2.0 smart infrared night vision up to 30 meters, 4-in-1 switchable video outputs (TVI/AHD/CVI/CVBS), and IP67 weather-proof metal housing.",
@@ -307,7 +307,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     images: ["/images/products/nikon_d850.jpg"],
     availabilityType: "IN_STOCK",
     stockQuantity: 2,
-    warrantyInfo: "90-Day Sharma Video Care Comprehensive Lab Warranty",
+    warrantyInfo: "90-Day QuickySewa Comprehensive Lab Warranty",
     returnPolicyInfo: "7-day verification return period",
     description:
       "Legendary Nikon full-frame DSLR paired with the versatile AF-S NIKKOR 24-120mm f/4G ED VR lens. Back-side illuminated 45.7MP FX sensor with no optical low-pass filter, 153-point AF system, and 4K UHD uncompressed HDMI output. Inspected and certified by our senior master technicians.",

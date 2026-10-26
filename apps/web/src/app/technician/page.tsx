@@ -24,9 +24,11 @@ import {
   ChevronRight,
   Shield,
 } from "lucide-react";
+import { useSnackbar } from "../../context/SnackbarContext";
 
 export default function TechnicianPortalPage() {
-  const { user, role, technicianType, switchPersona } = useAuth();
+  const { user, role, technicianType, isLoading } = useAuth();
+  const snackbar = useSnackbar();
   const technicianId = user?.id || "tech-svc-int-01";
 
   const [assignedJobs, setAssignedJobs] = useState<ServiceRequest[]>([]);
@@ -81,8 +83,10 @@ export default function TechnicianPortalPage() {
         status: newStatus,
         updatedAt: new Date().toISOString(),
       });
+      snackbar.success("Job status updated.");
     } catch (e) {
       console.error(e);
+      snackbar.error("Failed to update job status.");
     }
   };
 
@@ -126,14 +130,20 @@ export default function TechnicianPortalPage() {
       setDiagnosis("");
       setRecommendedWork("");
       setPartsRequired("");
+      snackbar.success("Inspection submitted. Job moved to Quote Pending.");
     } catch (e) {
       console.error(e);
+      snackbar.error("Failed to submit inspection.");
     } finally {
       setSubmittingInspection(false);
     }
   };
 
   const techPct = commSettings?.externalTechnicianCommissionPct || DEFAULT_TECH_COMMISSION_PCT;
+
+  if (isLoading) {
+    return <div className="container" style={{ padding: "5rem 1.25rem", textAlign: "center" }}>Checking access...</div>;
+  }
 
   if (role !== "technician" && role !== "admin") {
     return (
@@ -165,13 +175,6 @@ export default function TechnicianPortalPage() {
             <Link href="/login?redirect=/technician" className="btn btn-primary btn-sm">
               Sign In as Technician
             </Link>
-            <button
-              type="button"
-              onClick={() => switchPersona("tech-svc-int-01")}
-              className="btn btn-secondary btn-sm"
-            >
-              Switch to Internal Tech Role
-            </button>
           </div>
         </div>
       </div>

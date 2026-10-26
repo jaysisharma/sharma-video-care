@@ -1,3 +1,4 @@
+import { uploadToCloudinary } from "../../../lib/cloudinary";
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
@@ -8,6 +9,7 @@ import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../context/AuthContext";
 import { REPAIR_PRICE_NOTICE, ServiceRequest, ServiceStatus } from "@sharmavideocare/shared";
 import { Wrench, CheckCircle, ArrowLeft, Upload, Calendar, MapPin, AlertCircle } from "lucide-react";
+import { useSnackbar } from "../../../context/SnackbarContext";
 
 function ServiceRequestContent() {
   const router = useRouter();
@@ -27,6 +29,7 @@ function ServiceRequestContent() {
       : ""
   );
   const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
   const [recipientName, setRecipientName] = useState(user?.name || "");
   const [phone, setPhone] = useState(user?.phone || "");
   const [streetAddress, setStreetAddress] = useState("");
@@ -38,7 +41,7 @@ function ServiceRequestContent() {
   const [timeSlot, setTimeSlot] = useState("Morning (10:00 AM - 01:00 PM)");
   const [agreedToNotice, setAgreedToNotice] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const snackbar = useSnackbar();
 
   useEffect(() => {
     if (user) {
@@ -50,19 +53,18 @@ function ServiceRequestContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agreedToNotice) {
-      setError("Please confirm that you understand the inspection and diagnosis pricing rule.");
+      snackbar.warning("Please confirm that you understand the inspection and diagnosis pricing rule.");
       return;
     }
     if (!deviceModel.trim() || !description.trim()) {
-      setError("Please specify the equipment model and describe the problem.");
+      snackbar.warning("Please specify the equipment model and describe the problem.");
       return;
     }
 
     setSubmitting(true);
-    setError("");
 
     try {
-      const customerId = user ? user.id : "cust-janakpur-01";
+      const customerId = user ? user.id : `guest-${crypto.randomUUID()}`;
       const customerName = user ? user.name : recipientName;
 
       // Create Service Request document
@@ -98,24 +100,27 @@ function ServiceRequestContent() {
       const docRef = await addDoc(collection(db, "serviceRequests"), reqData);
 
       // Create linked support conversation
-      await addDoc(collection(db, "conversations"), {
-        customerId,
-        customerName,
-        contextType: "SERVICE_REQUEST",
-        contextId: docRef.id,
-        contextTitle: `Repair Request: ${deviceModel}`,
-        participantIds: [customerId, "admin-svc-01"],
-        status: "OPEN",
-        lastMessageText: `New repair requested: ${description.slice(0, 50)}...`,
-        lastMessageAt: new Date().toISOString(),
-        unreadCountCustomer: 0,
-        unreadCountStaff: 1,
-      });
+      // Guests are not signed in, so they cannot be chat participants.
+      if (user) {
+        await addDoc(collection(db, "conversations"), {
+          customerId,
+          customerName,
+          contextType: "SERVICE_REQUEST",
+          contextId: docRef.id,
+          contextTitle: `Repair Request: ${deviceModel}`,
+          participantIds: [customerId],
+          status: "OPEN",
+          lastMessageText: `New repair requested: ${description.slice(0, 50)}...`,
+          lastMessageAt: new Date().toISOString(),
+          unreadCountCustomer: 0,
+          unreadCountStaff: 1,
+        });
+      }
 
       router.push(`/services/success/${docRef.id}`);
     } catch (err: any) {
       console.error("Submission failed:", err);
-      setError(err?.message || "Failed to submit request. Please try again.");
+      snackbar.error("Failed to submit request. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -184,11 +189,6 @@ function ServiceRequestContent() {
         </div>
       </div>
 
-      {error && (
-        <div style={{ padding: "0.85rem 1rem", background: "#FDF0F0", border: "1px solid var(--color-danger)", color: "var(--color-danger)", borderRadius: "var(--radius-sm)", marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <AlertCircle size={18} /> {error}
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} className="card" style={{ padding: "2rem" }}>
         {/* Step 1: Device Details */}
@@ -221,14 +221,75 @@ function ServiceRequestContent() {
         </div>
 
         <div className="form-group">
-          <label className="form-label">Photo or Video Evidence (URL or link)</label>
-          <input
-            type="url"
-            className="form-input"
-            placeholder="https://... (Optional cloud link or photo reference)"
-            value={evidenceUrl}
-            onChange={(e) => setEvidenceUrl(e.target.value)}
-          />
+          <label className="form-label">Photo Evidence / Damage Photos (Cloudinary Upload)</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <label
+              style={{
+                border: "2px dashed var(--color-border)",
+                borderRadius: "var(--radius-md)",
+                padding: "1rem",
+                textAlign: "center",
+                cursor: "pointer",
+                background: evidenceUrl ? "#F0FDF4" : "#FFFFFF",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.4rem",
+              }}
+            >
+              <Upload size={22} color={evidenceUrl ? "var(--color-success)" : "var(--color-primary)"} />
+              <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                {uploadingEvidence
+                  ? "Uploading photo to Cloudinary..."
+                  : evidenceUrl
+                  ? "✓ Photo Uploaded! Click to replace"
+                  : "Upload fault photo or damage picture"}
+              </span>
+              <span style={{ fontSize: "0.75rem", color: "var(--color-muted)" }}>
+                Helps our technicians diagnose the issue faster
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                disabled={uploadingEvidence}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setUploadingEvidence(true);
+                  try {
+                    const url = await uploadToCloudinary(file, "video_care/repairs");
+                    setEvidenceUrl(url);
+                    snackbar.success("Defect photo uploaded to Cloudinary!");
+                  } catch (err: any) {
+                    console.error("Defect photo upload error:", err);
+                    snackbar.error(err.message || "Failed to upload photo.");
+                  } finally {
+                    setUploadingEvidence(false);
+                  }
+                }}
+              />
+            </label>
+
+            {evidenceUrl && (
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", background: "white", padding: "0.5rem", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)" }}>
+                <img src={evidenceUrl} alt="Evidence Preview" style={{ width: "48px", height: "48px", objectFit: "cover", borderRadius: "4px" }} />
+                <div style={{ flex: 1, minWidth: 0, fontSize: "0.8rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ color: "var(--color-success)", fontWeight: 600 }}>Cloudinary:</span> {evidenceUrl}
+                </div>
+              </div>
+            )}
+
+            <input
+              type="url"
+              className="form-input"
+              placeholder="Or paste external photo link (https://...)"
+              value={evidenceUrl}
+              onChange={(e) => setEvidenceUrl(e.target.value)}
+              style={{ fontSize: "0.8rem", padding: "0.4rem 0.6rem" }}
+            />
+          </div>
           <div className="form-hint">
             You can also send photo/video attachments directly in the support chat after submission.
           </div>

@@ -182,7 +182,7 @@ export default function UsedProductsPage() {
               Certified Pre-Owned Equipment
             </h1>
             <p style={{ fontSize: "13px", color: "#64748B", margin: "2px 0 0 0" }}>
-              100% in-house owned, bench-tested, and warranted by Sharma Video Care technicians.
+              100% in-house owned, bench-tested, and warranted by QuickySewa technicians.
             </p>
           </div>
 

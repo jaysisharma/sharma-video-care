@@ -363,7 +363,7 @@ export const JanakpurHub: React.FC = () => {
                   desc: "Authentic replacement components with direct factory warranty.",
                 },
                 {
-                  title: "90-Day Sharma Video Care Warranty",
+                  title: "90-Day QuickySewa Warranty",
                   desc: "Complete post-service coverage and free follow-up inspection.",
                 },
                 {

@@ -1,24 +1,22 @@
-// User & Demo Personas
-class DemoPersona {
-  final String id;
-  final String name;
-  final String email;
-  final String phone;
-  final String role; // 'customer' | 'admin' | 'technician'
-  final String? technicianType; // 'INTERNAL' | 'EXTERNAL'
-  final String label;
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-  const DemoPersona({
-    required this.id,
-    required this.name,
-    required this.email,
-    required this.phone,
-    required this.role,
-    this.technicianType,
-    required this.label,
-  });
+/// Firestore numbers may arrive as int, double or string (or be missing);
+/// anything unreadable becomes 0 instead of throwing.
+int _asInt(dynamic value) {
+  if (value is num) return value.toInt();
+  if (value is String) return num.tryParse(value.trim())?.toInt() ?? 0;
+  return 0;
 }
 
+/// Firestore dates may be a Timestamp or an ISO-8601 string (the web admin
+/// writes strings); anything else is treated as missing.
+DateTime? _asDate(dynamic value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is String) return DateTime.tryParse(value);
+  return null;
+}
+
+// User Profile Model
 class UserModel {
   final String id;
   final String name;
@@ -40,56 +38,54 @@ class UserModel {
     required this.createdAt,
   });
 
-  factory UserModel.fromPersona(DemoPersona p) {
+  factory UserModel.fromFirestore(String id, Map<String, dynamic> data) {
     return UserModel(
-      id: p.id,
-      name: p.name,
-      email: p.email,
-      phone: p.phone,
-      role: p.role,
-      technicianType: p.technicianType,
-      status: 'ACTIVE',
-      createdAt: DateTime.now(),
+      id: id,
+      name: data['name'] ?? '',
+      email: data['email'] ?? '',
+      phone: data['phone'] ?? '',
+      role: data['role'] ?? 'customer',
+      technicianType: data['technicianType'],
+      status: data['status'] ?? 'ACTIVE',
+      createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'email': email,
+      'phone': phone,
+      'role': role,
+      if (technicianType != null) 'technicianType': technicianType,
+      'status': status,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+
+  UserModel copyWith({
+    String? id,
+    String? name,
+    String? email,
+    String? phone,
+    String? role,
+    String? technicianType,
+    String? status,
+    DateTime? createdAt,
+  }) {
+    return UserModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      role: role ?? this.role,
+      technicianType: technicianType ?? this.technicianType,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 }
-
-const List<DemoPersona> kDemoPersonas = [
-  DemoPersona(
-    id: 'cust-janakpur-01',
-    name: 'Ramesh Sah',
-    email: 'ramesh@example.com',
-    phone: '+977-9801234567',
-    role: 'customer',
-    label: 'Customer (Ramesh - Janakpur)',
-  ),
-  DemoPersona(
-    id: 'admin-svc-01',
-    name: 'Sharma Admin',
-    email: 'admin@sharmavideocare.com',
-    phone: '+977-9851000000',
-    role: 'admin',
-    label: 'Admin (Operations & Dispatch)',
-  ),
-  DemoPersona(
-    id: 'tech-svc-int-01',
-    name: 'Bikash Sharma',
-    email: 'bikash.tech@sharmavideocare.com',
-    phone: '+977-9844001122',
-    role: 'technician',
-    technicianType: 'INTERNAL',
-    label: 'Internal Tech (Bikash - Camera)',
-  ),
-  DemoPersona(
-    id: 'tech-svc-ext-01',
-    name: 'Sunil Mandal',
-    email: 'sunil.mandal@example.com',
-    phone: '+977-9812334455',
-    role: 'technician',
-    technicianType: 'EXTERNAL',
-    label: 'External Tech (Sunil - Appliances)',
-  ),
-];
 
 // Service Category
 class ServiceCategoryModel {
@@ -113,7 +109,7 @@ class ServiceCategoryModel {
       name: data['name'] ?? '',
       slug: data['slug'] ?? '',
       description: data['description'] ?? '',
-      displayOrder: (data['displayOrder'] ?? 0) is int ? data['displayOrder'] : int.tryParse(data['displayOrder'].toString()) ?? 0,
+      displayOrder: _asInt(data['displayOrder']),
     );
   }
 }
@@ -207,9 +203,9 @@ class ServiceQuoteModel {
     return ServiceQuoteModel(
       id: id,
       serviceRequestId: data['serviceRequestId'] ?? '',
-      labourTotal: (data['labourTotal'] ?? 0) is int ? data['labourTotal'] : int.tryParse(data['labourTotal'].toString()) ?? 0,
-      partsTotal: (data['partsTotal'] ?? 0) is int ? data['partsTotal'] : int.tryParse(data['partsTotal'].toString()) ?? 0,
-      total: (data['total'] ?? 0) is int ? data['total'] : int.tryParse(data['total'].toString()) ?? 0,
+      labourTotal: _asInt(data['labourTotal']),
+      partsTotal: _asInt(data['partsTotal']),
+      total: _asInt(data['total']),
       status: data['status'] ?? 'SENT',
       warrantyTerms: data['warrantyTerms'] ?? 'Service Warranty applies',
       notes: data['notes'] ?? '',
@@ -224,12 +220,15 @@ class ProductModel {
   final String brand;
   final String categoryName;
   final int price;
-  final String availabilityType; // 'IN_STOCK' | 'SOURCE_ON_REQUEST'
+  final int? originalPrice; // list price before discount; null when not on sale
+  final String availabilityType; // 'IN_STOCK' | 'SOURCE_ON_REQUEST' | 'SPECIAL_ORDER' | 'OUT_OF_STOCK'
   final int stockQuantity;
   final String description;
   final String? imageUrl;
   final String warrantyInfo;
   final String returnPolicyInfo;
+  final bool isFlashDeal;
+  final DateTime? flashDealEndsAt;
 
   ProductModel({
     required this.id,
@@ -237,12 +236,15 @@ class ProductModel {
     required this.brand,
     required this.categoryName,
     required this.price,
+    this.originalPrice,
     required this.availabilityType,
     required this.stockQuantity,
     required this.description,
     this.imageUrl,
     required this.warrantyInfo,
     required this.returnPolicyInfo,
+    this.isFlashDeal = false,
+    this.flashDealEndsAt,
   });
 
   factory ProductModel.fromFirestore(String id, Map<String, dynamic> data) {
@@ -252,15 +254,35 @@ class ProductModel {
       name: data['name'] ?? '',
       brand: data['brand'] ?? '',
       categoryName: data['categoryName'] ?? '',
-      price: (data['price'] ?? 0) is int ? data['price'] : int.tryParse(data['price'].toString()) ?? 0,
+      price: _asInt(data['price']),
+      originalPrice: data['originalPrice'] == null ? null : _asInt(data['originalPrice']),
       availabilityType: data['availabilityType'] ?? 'IN_STOCK',
-      stockQuantity: (data['stockQuantity'] ?? 0) is int ? data['stockQuantity'] : int.tryParse(data['stockQuantity'].toString()) ?? 0,
+      stockQuantity: _asInt(data['stockQuantity']),
       description: data['description'] ?? '',
       imageUrl: images.isNotEmpty ? images[0].toString() : null,
       warrantyInfo: data['warrantyInfo'] ?? 'Manufacturer Warranty',
       returnPolicyInfo: data['returnPolicyInfo'] ?? 'Standard Return Terms',
+      isFlashDeal: data['isFlashDeal'] == true,
+      flashDealEndsAt: _asDate(data['flashDealEndsAt']),
     );
   }
+
+  /// A flash deal is live while it's flagged, discounted, in stock and its
+  /// end time is still in the future.
+  bool isLiveFlashDeal(DateTime now) =>
+      isFlashDeal &&
+      hasDiscount &&
+      !isOutOfStock &&
+      flashDealEndsAt != null &&
+      flashDealEndsAt!.isAfter(now);
+
+  bool get hasDiscount => originalPrice != null && originalPrice! > price;
+
+  /// Whole-number percent off the list price, or 0 when not on sale.
+  int get discountPercent =>
+      hasDiscount ? (((originalPrice! - price) / originalPrice!) * 100).round() : 0;
+
+  bool get isOutOfStock => availabilityType == 'OUT_OF_STOCK';
 }
 
 // Used Product
@@ -268,6 +290,8 @@ class UsedProductModel {
   final String id;
   final String name;
   final String brand;
+  final String? model;
+  final String categoryName;
   final String conditionGrade;
   final String conditionDescription;
   final int price;
@@ -281,12 +305,14 @@ class UsedProductModel {
     required this.id,
     required this.name,
     required this.brand,
+    this.model,
+    this.categoryName = 'Cameras',
     required this.conditionGrade,
     required this.conditionDescription,
     required this.price,
     required this.knownDefects,
     required this.testNotes,
-    required this.includedAccessories,
+    this.includedAccessories = const [],
     required this.warrantyDetails,
     this.imageUrl,
   });
@@ -300,13 +326,15 @@ class UsedProductModel {
       id: id,
       name: data['name'] ?? '',
       brand: data['brand'] ?? '',
+      model: data['model'],
+      categoryName: data['categoryName'] ?? 'Cameras',
       conditionGrade: data['conditionGrade'] ?? 'EXCELLENT',
       conditionDescription: data['conditionDescription'] ?? '',
-      price: (data['price'] ?? 0) is int ? data['price'] : int.tryParse(data['price'].toString()) ?? 0,
+      price: _asInt(data['price']),
       knownDefects: defects,
       testNotes: data['testNotes'] ?? '',
       includedAccessories: accs,
-      warrantyDetails: data['warrantyDetails'] ?? 'Sharma Video Care Limited Warranty',
+      warrantyDetails: data['warrantyDetails'] ?? 'QuickySewa Limited Warranty',
       imageUrl: images.isNotEmpty ? images[0].toString() : null,
     );
   }
@@ -376,7 +404,7 @@ class OrderModel {
     return OrderModel(
       id: id,
       customerId: data['customerId'] ?? '',
-      total: (data['total'] ?? 0) is int ? data['total'] : int.tryParse(data['total'].toString()) ?? 0,
+      total: _asInt(data['total']),
       paymentMethod: data['paymentMethod'] ?? 'COD',
       paymentStatus: data['paymentStatus'] ?? 'PENDING',
       orderStatus: data['orderStatus'] ?? 'CONFIRMED',
@@ -464,3 +492,280 @@ class SourceRequestModel {
     );
   }
 }
+
+// Delivery Hub Model
+class DeliveryHub {
+  final String id;
+  final String name;
+  final String city;
+  final String address;
+  final String estimatedDelivery;
+  final bool isDefault;
+
+  const DeliveryHub({
+    required this.id,
+    required this.name,
+    required this.city,
+    required this.address,
+    required this.estimatedDelivery,
+    this.isDefault = false,
+  });
+}
+
+const List<DeliveryHub> kNepalDeliveryHubs = [
+  DeliveryHub(
+    id: 'hub-jkr',
+    name: 'Janakpur Hub',
+    city: 'Janakpurdham',
+    address: 'Station Road, Near Bhanu Chowk',
+    estimatedDelivery: 'Same-day pickup / 24h courier',
+    isDefault: true,
+  ),
+  DeliveryHub(
+    id: 'hub-ktm',
+    name: 'Kathmandu Hub',
+    city: 'Kathmandu',
+    address: 'New Road Camera Market, Pako',
+    estimatedDelivery: 'Next-day express delivery',
+  ),
+  DeliveryHub(
+    id: 'hub-bir',
+    name: 'Biratnagar Hub',
+    city: 'Biratnagar',
+    address: 'Main Road, Traffic Chowk',
+    estimatedDelivery: '1-2 business days',
+  ),
+  DeliveryHub(
+    id: 'hub-pok',
+    name: 'Pokhara Hub',
+    city: 'Pokhara',
+    address: 'Lakeside Center, Ward 6',
+    estimatedDelivery: '1-2 business days',
+  ),
+  DeliveryHub(
+    id: 'hub-cht',
+    name: 'Chitwan Hub',
+    city: 'Bharatpur',
+    address: 'Lions Chowk, Narayangarh',
+    estimatedDelivery: '24-48 hours delivery',
+  ),
+  DeliveryHub(
+    id: 'hub-btw',
+    name: 'Butwal Hub',
+    city: 'Butwal',
+    address: 'Traffic Chowk, Milan Chowk',
+    estimatedDelivery: '1-2 business days',
+  ),
+];
+
+// Notification Item Model
+class NotificationItemModel {
+  final String id;
+  final String title;
+  final String message;
+  final String category; // 'orders' | 'repairs' | 'offers' | 'system'
+  final DateTime timestamp;
+  final bool isRead;
+  final String? actionRoute; // 'shop' | 'services' | 'tradein' | 'account' | 'cart'
+  final String? actionLabel;
+  final String? targetGroup; // 'all' | 'users' | 'guest' | 'specific'
+  final String? imageUrl;
+  final String? userId;
+
+  const NotificationItemModel({
+    required this.id,
+    required this.title,
+    required this.message,
+    required this.category,
+    required this.timestamp,
+    this.isRead = false,
+    this.actionRoute,
+    this.actionLabel,
+    this.targetGroup = 'all',
+    this.imageUrl,
+    this.userId,
+  });
+
+  factory NotificationItemModel.fromFirestore(String id, Map<String, dynamic> data) {
+    DateTime parsedDate;
+    final created = data['createdAt'] ?? data['timestamp'];
+    if (created is String) {
+      parsedDate = DateTime.tryParse(created) ?? DateTime.now();
+    } else {
+      parsedDate = DateTime.now();
+    }
+
+    return NotificationItemModel(
+      id: id,
+      title: data['title']?.toString() ?? '',
+      message: data['message']?.toString() ?? '',
+      category: data['category']?.toString() ?? 'system',
+      timestamp: parsedDate,
+      isRead: data['isRead'] == true || data['read'] == true,
+      actionRoute: data['actionRoute']?.toString(),
+      actionLabel: data['actionLabel']?.toString(),
+      targetGroup: data['targetGroup']?.toString() ?? 'all',
+      imageUrl: data['imageUrl']?.toString(),
+      userId: data['userId']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'message': message,
+      'category': category,
+      'targetGroup': targetGroup ?? 'all',
+      'actionRoute': actionRoute,
+      'actionLabel': actionLabel,
+      'imageUrl': imageUrl,
+      'userId': userId,
+      'isRead': isRead,
+      'createdAt': timestamp.toIso8601String(),
+    };
+  }
+
+  NotificationItemModel copyWith({
+    String? id,
+    String? title,
+    String? message,
+    String? category,
+    DateTime? timestamp,
+    bool? isRead,
+    String? actionRoute,
+    String? actionLabel,
+    String? targetGroup,
+    String? imageUrl,
+    String? userId,
+  }) {
+    return NotificationItemModel(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      message: message ?? this.message,
+      category: category ?? this.category,
+      timestamp: timestamp ?? this.timestamp,
+      isRead: isRead ?? this.isRead,
+      actionRoute: actionRoute ?? this.actionRoute,
+      actionLabel: actionLabel ?? this.actionLabel,
+      targetGroup: targetGroup ?? this.targetGroup,
+      imageUrl: imageUrl ?? this.imageUrl,
+      userId: userId ?? this.userId,
+    );
+  }
+}
+
+// User Delivery Address Model
+class UserAddress {
+  final String id;
+  final String label;
+  final String fullAddress;
+  final String city;
+  final String phone;
+  final bool isDefault;
+
+  const UserAddress({
+    required this.id,
+    required this.label,
+    required this.fullAddress,
+    required this.city,
+    required this.phone,
+    this.isDefault = false,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'label': label,
+    'fullAddress': fullAddress,
+    'city': city,
+    'phone': phone,
+    'isDefault': isDefault,
+  };
+
+  factory UserAddress.fromMap(Map<String, dynamic> map) {
+    return UserAddress(
+      id: map['id'] ?? '',
+      label: map['label'] ?? 'Delivery Address',
+      fullAddress: map['fullAddress'] ?? '',
+      city: map['city'] ?? '',
+      phone: map['phone'] ?? '',
+      isDefault: map['isDefault'] ?? false,
+    );
+  }
+
+  UserAddress copyWith({
+    String? id,
+    String? label,
+    String? fullAddress,
+    String? city,
+    String? phone,
+    bool? isDefault,
+  }) {
+    return UserAddress(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      fullAddress: fullAddress ?? this.fullAddress,
+      city: city ?? this.city,
+      phone: phone ?? this.phone,
+      isDefault: isDefault ?? this.isDefault,
+    );
+  }
+}
+
+// User Registered Equipment / Gear Locker Model
+class RegisteredGear {
+  final String id;
+  final String brand;
+  final String model;
+  final String serialNumber;
+  final String warrantyStatus;
+  final DateTime registeredAt;
+
+  const RegisteredGear({
+    required this.id,
+    required this.brand,
+    required this.model,
+    required this.serialNumber,
+    required this.warrantyStatus,
+    required this.registeredAt,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'brand': brand,
+    'model': model,
+    'serialNumber': serialNumber,
+    'warrantyStatus': warrantyStatus,
+    'registeredAt': registeredAt.toIso8601String(),
+  };
+
+  factory RegisteredGear.fromMap(Map<String, dynamic> map) {
+    return RegisteredGear(
+      id: map['id'] ?? '',
+      brand: map['brand'] ?? '',
+      model: map['model'] ?? '',
+      serialNumber: map['serialNumber'] ?? '',
+      warrantyStatus: map['warrantyStatus'] ?? 'Active Lab Warranty',
+      registeredAt: DateTime.tryParse(map['registeredAt'] ?? '') ?? DateTime.now(),
+    );
+  }
+
+  RegisteredGear copyWith({
+    String? id,
+    String? brand,
+    String? model,
+    String? serialNumber,
+    String? warrantyStatus,
+    DateTime? registeredAt,
+  }) {
+    return RegisteredGear(
+      id: id ?? this.id,
+      brand: brand ?? this.brand,
+      model: model ?? this.model,
+      serialNumber: serialNumber ?? this.serialNumber,
+      warrantyStatus: warrantyStatus ?? this.warrantyStatus,
+      registeredAt: registeredAt ?? this.registeredAt,
+    );
+  }
+}
+
+

@@ -8,6 +8,7 @@ import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../context/AuthContext";
 import { REPAIR_PRICE_NOTICE, ServiceRequest } from "@sharmavideocare/shared";
 import { Hammer, CheckCircle, ArrowLeft, AlertCircle } from "lucide-react";
+import { useSnackbar } from "../../../context/SnackbarContext";
 
 export default function CustomServicePage() {
   const router = useRouter();
@@ -24,24 +25,23 @@ export default function CustomServicePage() {
   );
   const [agreedToNotice, setAgreedToNotice] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const snackbar = useSnackbar();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agreedToNotice) {
-      setError("Please confirm the inspection and diagnosis rule.");
+      snackbar.warning("Please confirm the inspection and diagnosis rule.");
       return;
     }
     if (!title.trim() || !description.trim()) {
-      setError("Please describe the custom service or installation required.");
+      snackbar.warning("Please describe the custom service or installation required.");
       return;
     }
 
     setSubmitting(true);
-    setError("");
 
     try {
-      const customerId = user ? user.id : "cust-janakpur-01";
+      const customerId = user ? user.id : `guest-${crypto.randomUUID()}`;
       const customerName = user ? user.name : recipientName;
 
       const reqData: Omit<ServiceRequest, "id"> = {
@@ -74,24 +74,27 @@ export default function CustomServicePage() {
       const docRef = await addDoc(collection(db, "serviceRequests"), reqData);
 
       // Create linked chat
-      await addDoc(collection(db, "conversations"), {
-        customerId,
-        customerName,
-        contextType: "SERVICE_REQUEST",
-        contextId: docRef.id,
-        contextTitle: `Custom Service: ${title}`,
-        participantIds: [customerId, "admin-svc-01"],
-        status: "OPEN",
-        lastMessageText: `New custom work requested: ${title}`,
-        lastMessageAt: new Date().toISOString(),
-        unreadCountCustomer: 0,
-        unreadCountStaff: 1,
-      });
+      // Guests are not signed in, so they cannot be chat participants.
+      if (user) {
+        await addDoc(collection(db, "conversations"), {
+          customerId,
+          customerName,
+          contextType: "SERVICE_REQUEST",
+          contextId: docRef.id,
+          contextTitle: `Custom Service: ${title}`,
+          participantIds: [customerId],
+          status: "OPEN",
+          lastMessageText: `New custom work requested: ${title}`,
+          lastMessageAt: new Date().toISOString(),
+          unreadCountCustomer: 0,
+          unreadCountStaff: 1,
+        });
+      }
 
       router.push(`/services/success/${docRef.id}`);
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || "Failed to submit custom request.");
+      snackbar.error("Failed to submit custom request.");
     } finally {
       setSubmitting(false);
     }
@@ -125,11 +128,6 @@ export default function CustomServicePage() {
         </div>
       </div>
 
-      {error && (
-        <div style={{ padding: "0.85rem 1rem", background: "#FDF0F0", border: "1px solid var(--color-danger)", color: "var(--color-danger)", borderRadius: "var(--radius-sm)", marginBottom: "1.5rem" }}>
-          {error}
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} className="card" style={{ padding: "2rem" }}>
         <div className="form-group">

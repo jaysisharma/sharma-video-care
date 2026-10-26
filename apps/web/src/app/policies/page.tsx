@@ -4,7 +4,7 @@ import { Shield, RotateCcw, AlertTriangle, Truck, Banknote, HelpCircle, CheckCir
 
 export const metadata = {
   title: "Official Store Policies — Shipping, Returns & Warranty",
-  description: "Comprehensive customer policies for Sharma Video Care: nationwide courier transit, 7-day inspection window, authorized warranties, and diagnostic terms.",
+  description: "Comprehensive customer policies for QuickySewa: nationwide courier transit, 7-day inspection window, authorized warranties, and diagnostic terms.",
 };
 
 export default function PoliciesPage() {
@@ -115,10 +115,10 @@ export default function PoliciesPage() {
               </h2>
             </div>
             <p style={{ fontSize: "13.5px", color: "#475569", lineHeight: 1.6, margin: "0 0 12px 0" }}>
-              Every used camera body, prime lens, or cinema accessory sold by Sharma Video Care undergoes our mandatory 45-point workshop bench test.
+              Every used camera body, prime lens, or cinema accessory sold by QuickySewa undergoes our mandatory 45-point workshop bench test.
             </p>
             <ul style={{ fontSize: "13px", color: "#475569", lineHeight: 1.7, margin: 0, paddingLeft: "20px" }}>
-              <li><strong>Workshop Warranty:</strong> Covered by a 60-to-180 day Sharma Video Care repair lab warranty on functional parts and mechanics.</li>
+              <li><strong>Workshop Warranty:</strong> Covered by a 60-to-180 day QuickySewa repair lab warranty on functional parts and mechanics.</li>
               <li><strong>Shutter Actuation & Cosmetic Transparency:</strong> Exact shutter counts and cosmetic condition grades (A+, A, B) are fully stated on the product page before payment.</li>
               <li><strong>Guaranteed Clean Optics:</strong> Lenses are inspected under microscope lighting to certify zero mold, fungus, or element separation.</li>
             </ul>

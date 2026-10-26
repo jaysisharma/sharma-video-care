@@ -112,8 +112,8 @@ export const RepairEstimator: React.FC = () => {
     const maxP = currentSymptom.maxPrice.toLocaleString("en-IN");
 
     const text = isNe
-      ? `नमस्ते Sharma Video Care! मैले वेबसाइटबाट खर्च अनुमान हेरेँ: उपकरण: ${devName}${brandText}, समस्या: ${sympName}, अनुमानित खर्च: रु. ${minP} - ${maxP}। के प्राविधिक उपलब्ध हुनुहुन्छ?`
-      : `Hello Sharma Video Care! I used your online estimator for ${devName}${brandText}. Issue: ${sympName}. Estimated Cost: Rs. ${minP} - ${maxP}. Can you confirm repair booking availability?`;
+      ? `नमस्ते QuickySewa! मैले वेबसाइटबाट खर्च अनुमान हेरेँ: उपकरण: ${devName}${brandText}, समस्या: ${sympName}, अनुमानित खर्च: रु. ${minP} - ${maxP}। के प्राविधिक उपलब्ध हुनुहुन्छ?`
+      : `Hello QuickySewa! I used your online estimator for ${devName}${brandText}. Issue: ${sympName}. Estimated Cost: Rs. ${minP} - ${maxP}. Can you confirm repair booking availability?`;
 
     return `https://wa.me/9779854022200?text=${encodeURIComponent(text)}`;
   }, [currentDevice, currentSymptom, selectedBrand, isNe]);
@@ -912,7 +912,7 @@ export const RepairEstimator: React.FC = () => {
                     }}
                   >
                     <ShieldCheck size={14} />
-                    {currentSymptom.warrantyDays} {isNe ? "दिन शर्मा भिडियो केयर वारेन्टी" : "Days Official Warranty"}
+                    {currentSymptom.warrantyDays} {isNe ? "दिन क्विकीसेवा वारेन्टी" : "Days Official Warranty"}
                   </span>
                 </div>
 

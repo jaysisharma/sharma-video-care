@@ -15,7 +15,7 @@ export const Logo: React.FC<LogoProps> = ({
   showSubtitle = false,
   inverted = false,
 }) => {
-  // Brand Emblem for Sharma Video Care
+  // Brand Emblem for QuickySewa
   const emblem = (
     <div
       style={{
@@ -47,31 +47,18 @@ export const Logo: React.FC<LogoProps> = ({
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: "0.65rem", textDecoration: "none" }}>
       {emblem}
-      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
-        <span
-          style={{
-            fontFamily: "var(--font-heading, inherit)",
-            fontSize: "1.05rem",
-            fontWeight: 850,
-            letterSpacing: "-0.01em",
-            color: textColorMain,
-          }}
-        >
-          SHARMA
-        </span>
-        <span
-          style={{
-            fontFamily: "var(--font-heading, inherit)",
-            fontSize: "0.75rem",
-            fontWeight: 800,
-            letterSpacing: "0.06em",
-            color: "var(--color-primary, #E86F1C)",
-            marginTop: "2px",
-          }}
-        >
-          VIDEO CARE
-        </span>
-      </div>
+      <span
+        style={{
+          fontFamily: "var(--font-heading, inherit)",
+          fontSize: "1.2rem",
+          fontWeight: 850,
+          letterSpacing: "-0.02em",
+          lineHeight: 1,
+          color: textColorMain,
+        }}
+      >
+        Quicky<span style={{ color: "var(--color-primary, #E86F1C)" }}>Sewa</span>
+      </span>
     </div>
   );
 };

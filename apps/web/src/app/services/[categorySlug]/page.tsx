@@ -316,7 +316,7 @@ export default function CategoryDetailPage() {
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "#16A34A", marginBottom: "0.5rem" }}>
                 <Shield size={18} />
                 <h4 style={{ fontSize: "1.05rem", fontWeight: 700, color: "#0F172A", margin: 0 }}>
-                  Sharma Video Care Diagnostic Guarantee
+                  QuickySewa Diagnostic Guarantee
                 </h4>
               </div>
               <p style={{ fontSize: "0.88rem", color: "#64748B", lineHeight: 1.6, margin: 0 }}>

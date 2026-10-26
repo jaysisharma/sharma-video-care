@@ -299,7 +299,7 @@ export default function UsedProductDetailPage() {
                 </div>
                 <div>
                   Facility:{" "}
-                  <strong style={{ color: "#0F172A" }}>Sharma Video Care Workshop, Janakpur</strong>
+                  <strong style={{ color: "#0F172A" }}>QuickySewa Workshop, Janakpur</strong>
                 </div>
                 <div>
                   Inventory Type:{" "}
@@ -680,7 +680,7 @@ export default function UsedProductDetailPage() {
                     {item.warrantyDetails}
                   </div>
                   <div style={{ fontSize: "12.5px", color: "#64748B", marginTop: "2px" }}>
-                    Covers internal mechanical and electronic components serviced by Sharma Video Care.
+                    Covers internal mechanical and electronic components serviced by QuickySewa.
                   </div>
                 </div>
               </div>

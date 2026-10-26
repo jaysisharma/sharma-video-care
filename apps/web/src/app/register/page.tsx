@@ -2,275 +2,198 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useAuth } from "../../context/AuthContext";
-import {
-  User,
-  Mail,
-  Phone,
-  Lock,
-  AlertCircle,
-  ArrowLeft,
-  Eye,
-  EyeOff,
-  X,
-} from "lucide-react";
-import { Logo } from "../../components/Logo";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth, safeRedirectPath } from "../../context/AuthContext";
+import { useLanguage } from "../../context/LanguageContext";
+import { useSnackbar } from "../../context/SnackbarContext";
+import { AuthLayout, PasswordField } from "../../components/auth/AuthLayout";
 
-export default function RegisterPage() {
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const NEPAL_MOBILE_PATTERN = /^(\+?977)?9[678]\d{8}$/;
+
+const SIGN_UP_ERRORS: Record<string, string> = {
+  "auth/email-already-in-use": "auth.err.emailInUse",
+  "auth/weak-password": "auth.err.weakPassword",
+  "auth/password-does-not-meet-requirements": "auth.err.weakPassword",
+  "auth/invalid-email": "auth.err.invalidEmail",
+  "auth/network-request-failed": "auth.err.network",
+  "auth/too-many-requests": "auth.err.tooMany",
+};
+
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectParam = safeRedirectPath(searchParams.get("redirect"));
+
   const { signUp } = useAuth();
+  const { t } = useLanguage();
+  const snackbar = useSnackbar();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("+977 ");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const validationError = (): string | null => {
+    if (!name.trim()) return "auth.err.name";
+    if (!EMAIL_PATTERN.test(email.trim())) return "auth.err.invalidEmail";
+    if (!NEPAL_MOBILE_PATTERN.test(phone.replace(/[\s-]/g, ""))) return "auth.err.phone";
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) return "auth.err.weakPassword";
+    if (password !== confirmPassword) return "auth.err.mismatch";
+    if (!agreeTerms) return "auth.err.terms";
+    return null;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
 
-    if (!name.trim()) {
-      setError("Please enter your full name.");
-      return;
-    }
-    if (!email.trim()) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-    if (!phone.trim() || phone.trim() === "+977") {
-      setError("Please enter a valid Nepal mobile contact number.");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match. Please verify your password confirmation.");
-      return;
-    }
-    if (!agreeTerms) {
-      setError("You must agree to the Terms of Service to create an account.");
+    const invalid = validationError();
+    if (invalid) {
+      snackbar.warning(t(invalid));
       return;
     }
 
     setLoading(true);
     try {
       await signUp(name, email, phone, password);
-      router.push("/account");
+      snackbar.success(t("auth.register.success", { email: email.trim() }));
+      router.replace(redirectParam || "/account");
     } catch (err: any) {
       console.error("Registration error:", err);
-      if (err?.code === "auth/email-already-in-use") {
-        setError("An account with this email address already exists. Please sign in instead.");
-      } else if (err?.code === "auth/weak-password") {
-        setError("Password is too weak. Please use letters and numbers.");
-      } else {
-        setError(err?.message || "Failed to create account. Please try again.");
-      }
+      snackbar.error(t(SIGN_UP_ERRORS[err?.code] || "auth.err.generic"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-card" style={{ maxWidth: "480px" }}>
-        {/* Header */}
-        <div className="auth-header">
-          <div className="auth-brand-logo">
-            <Logo variant="stacked" size={44} showSubtitle={false} />
+    <AuthLayout
+      title={t("auth.register.title")}
+      subtitle={t("auth.register.subtitle")}
+      footer={
+        <>
+          {t("auth.register.haveAccount")}
+          <Link
+            href={redirectParam ? `/login?redirect=${encodeURIComponent(redirectParam)}` : "/login"}
+            className="auth-switch-link"
+          >
+            {t("auth.register.signIn")}
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} noValidate>
+        <div className="auth-field">
+          <div className="auth-label-row">
+            <label className="auth-label" htmlFor="reg-name">
+              {t("auth.register.name")}
+            </label>
           </div>
-          <h1 className="auth-title">Create your account</h1>
-          <p className="auth-subtitle">
-            Sign up to track repairs, approve quotations, and shop electronics.
+          <input
+            id="reg-name"
+            type="text"
+            className="auth-input"
+            placeholder={t("auth.register.namePlaceholder")}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="name"
+            required
+          />
+        </div>
+
+        <div className="auth-field">
+          <div className="auth-label-row">
+            <label className="auth-label" htmlFor="reg-phone">
+              {t("auth.register.phone")}
+            </label>
+          </div>
+          <input
+            id="reg-phone"
+            type="tel"
+            inputMode="tel"
+            className="auth-input"
+            placeholder="98XXXXXXXX"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            autoComplete="tel"
+            aria-describedby="reg-phone-hint"
+            required
+          />
+          <p id="reg-phone-hint" className="auth-hint">
+            {t("auth.register.phoneHint")}
           </p>
         </div>
 
-        {/* Error notification */}
-        {error && (
-          <div className="auth-alert-error">
-            <AlertCircle size={18} style={{ flexShrink: 0, marginTop: "1px" }} />
-            <div style={{ flex: 1 }}>{error}</div>
-            <button
-              type="button"
-              onClick={() => setError(null)}
-              style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", padding: "2px" }}
-              aria-label="Dismiss error"
-            >
-              <X size={15} />
-            </button>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} noValidate>
-          <div className="auth-field">
-            <div className="auth-label-row">
-              <label className="auth-label" htmlFor="reg-name">
-                Full Name
-              </label>
-            </div>
-            <div className="auth-input-wrapper">
-              <input
-                id="reg-name"
-                type="text"
-                className="auth-input"
-                placeholder="e.g. Ramesh Sah"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoComplete="name"
-                required
-              />
-              <User size={16} className="auth-input-icon" />
-            </div>
-          </div>
-
-          <div className="auth-field">
-            <div className="auth-label-row">
-              <label className="auth-label" htmlFor="reg-email">
-                Email Address
-              </label>
-            </div>
-            <div className="auth-input-wrapper">
-              <input
-                id="reg-email"
-                type="email"
-                className="auth-input"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                required
-              />
-              <Mail size={16} className="auth-input-icon" />
-            </div>
-          </div>
-
-          <div className="auth-field">
-            <div className="auth-label-row">
-              <label className="auth-label" htmlFor="reg-phone">
-                Mobile Number (Nepal)
-              </label>
-            </div>
-            <div className="auth-input-wrapper">
-              <input
-                id="reg-phone"
-                type="tel"
-                className="auth-input"
-                placeholder="+977-9801234567"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                autoComplete="tel"
-                required
-              />
-              <Phone size={16} className="auth-input-icon" />
-            </div>
-            <span style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "3px", display: "block" }}>
-              Used for repair telemetry SMS updates and technician arrival in Janakpur.
-            </span>
-          </div>
-
-          <div className="auth-field">
-            <div className="auth-label-row">
-              <label className="auth-label" htmlFor="reg-password">
-                Password
-              </label>
-            </div>
-            <div className="auth-input-wrapper">
-              <input
-                id="reg-password"
-                type={showPassword ? "text" : "password"}
-                className="auth-input"
-                placeholder="At least 6 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
-                required
-              />
-              <Lock size={16} className="auth-input-icon" />
-              <button
-                type="button"
-                className="auth-eye-btn"
-                onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
-
-          <div className="auth-field">
-            <div className="auth-label-row">
-              <label className="auth-label" htmlFor="reg-confirm">
-                Confirm Password
-              </label>
-            </div>
-            <div className="auth-input-wrapper">
-              <input
-                id="reg-confirm"
-                type={showPassword ? "text" : "password"}
-                className="auth-input"
-                placeholder="Repeat your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                autoComplete="new-password"
-                required
-              />
-              <Lock size={16} className="auth-input-icon" />
-            </div>
-          </div>
-
-          <div className="auth-checkbox-row" style={{ alignItems: "flex-start", marginTop: "1rem" }}>
-            <label className="auth-checkbox-label" style={{ alignItems: "flex-start" }}>
-              <input
-                type="checkbox"
-                checked={agreeTerms}
-                onChange={(e) => setAgreeTerms(e.target.checked)}
-                style={{ marginTop: "3px" }}
-              />
-              <span style={{ fontSize: "0.82rem", lineHeight: 1.45 }}>
-                I agree to Sharma Video Care&apos;s{" "}
-                <Link href="/terms" target="_blank" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>
-                  Terms of Service
-                </Link>{" "}
-                and{" "}
-                <Link href="/privacy" target="_blank" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>
-                  Privacy Policy
-                </Link>
-                .
-              </span>
+        <div className="auth-field">
+          <div className="auth-label-row">
+            <label className="auth-label" htmlFor="reg-email">
+              {t("auth.email")}
             </label>
           </div>
-
-          <button
-            type="submit"
-            className="auth-btn-primary"
-            style={{ marginTop: "1.25rem" }}
-            disabled={loading}
-          >
-            {loading ? "Creating account..." : "Create Account"}
-          </button>
-        </form>
-
-        <div className="auth-switch-prompt">
-          Already have an account?
-          <Link href="/login" className="auth-switch-link">
-            Sign in
-          </Link>
+          <input
+            id="reg-email"
+            type="email"
+            inputMode="email"
+            className="auth-input"
+            placeholder="name@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            required
+          />
         </div>
-      </div>
 
-      <div className="auth-bottom-nav">
-        <Link href="/" className="auth-back-link">
-          <ArrowLeft size={15} />
-          <span>Back to Sharma Video Care Store</span>
-        </Link>
-      </div>
-    </div>
+        <PasswordField
+          id="reg-password"
+          label={t("auth.password")}
+          value={password}
+          onChange={setPassword}
+          autoComplete="new-password"
+          placeholder={t("auth.register.passwordPlaceholder")}
+        />
+
+        <PasswordField
+          id="reg-confirm"
+          label={t("auth.register.confirm")}
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+          autoComplete="new-password"
+          placeholder={t("auth.register.confirmPlaceholder")}
+        />
+
+        <div className="auth-checkbox-row">
+          <label className="auth-checkbox-label">
+            <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} />
+            <span>
+              {t("auth.register.agreePrefix")}{" "}
+              <Link href="/terms" target="_blank" className="auth-inline-link">
+                {t("auth.register.terms")}
+              </Link>{" "}
+              {t("auth.register.and")}{" "}
+              <Link href="/privacy" target="_blank" className="auth-inline-link">
+                {t("auth.register.privacy")}
+              </Link>
+              {t("auth.register.agreeSuffix")}
+            </span>
+          </label>
+        </div>
+
+        <button type="submit" className="auth-btn-primary" disabled={loading}>
+          {loading && <span className="auth-spinner" aria-hidden="true" />}
+          {loading ? t("auth.register.submitting") : t("auth.register.submit")}
+        </button>
+      </form>
+    </AuthLayout>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <React.Suspense fallback={<div className="auth-page" />}>
+      <RegisterForm />
+    </React.Suspense>
   );
 }

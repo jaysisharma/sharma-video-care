@@ -1,3 +1,4 @@
+import { uploadToCloudinary } from "../../lib/cloudinary";
 "use client";
 
 import React, { useState, Suspense } from "react";
@@ -6,7 +7,8 @@ import Link from "next/link";
 import { collection, addDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { useAuth } from "../../context/AuthContext";
-import { Search, CheckCircle, ArrowLeft, ShieldCheck, AlertCircle } from "lucide-react";
+import { Search, CheckCircle, ArrowLeft, Upload, ShieldCheck, AlertCircle } from "lucide-react";
+import { useSnackbar } from "../../context/SnackbarContext";
 
 function SourceRequestContent() {
   const router = useRouter();
@@ -21,26 +23,26 @@ function SourceRequestContent() {
   const [budget, setBudget] = useState("");
   const [notes, setNotes] = useState("");
   const [referenceUrl, setReferenceUrl] = useState("");
+  const [uploadingReference, setUploadingReference] = useState(false);
   const [deliveryCity, setDeliveryCity] = useState("Janakpur");
   const [phone, setPhone] = useState(user?.phone || "+977-9801234567");
 
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [requestId, setRequestId] = useState("");
-  const [error, setError] = useState("");
+  const snackbar = useSnackbar();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!productName.trim()) {
-      setError("Please specify the product name or equipment model.");
+      snackbar.warning("Please specify the product name or equipment model.");
       return;
     }
 
     setSubmitting(true);
-    setError("");
 
     try {
-      const customerId = user ? user.id : "guest-request";
+      const customerId = user ? user.id : `guest-${crypto.randomUUID()}`;
       const customerName = user ? user.name : "Guest Customer";
 
       const docRef = await addDoc(collection(db, "sourceRequests"), {
@@ -60,25 +62,28 @@ function SourceRequestContent() {
       });
 
       // Create linked chat
-      await addDoc(collection(db, "conversations"), {
-        customerId,
-        customerName,
-        contextType: "SOURCE_REQUEST",
-        contextId: docRef.id,
-        contextTitle: `Source Request: ${productName}`,
-        participantIds: [customerId, "admin-svc-01"],
-        status: "OPEN",
-        lastMessageText: `New product sourcing request submitted for ${productName}`,
-        lastMessageAt: new Date().toISOString(),
-        unreadCountCustomer: 0,
-        unreadCountStaff: 1,
-      });
+      // Guests are not signed in, so they cannot be chat participants.
+      if (user) {
+        await addDoc(collection(db, "conversations"), {
+          customerId,
+          customerName,
+          contextType: "SOURCE_REQUEST",
+          contextId: docRef.id,
+          contextTitle: `Source Request: ${productName}`,
+          participantIds: [customerId],
+          status: "OPEN",
+          lastMessageText: `New product sourcing request submitted for ${productName}`,
+          lastMessageAt: new Date().toISOString(),
+          unreadCountCustomer: 0,
+          unreadCountStaff: 1,
+        });
+      }
 
       setRequestId(docRef.id);
       setSubmitted(true);
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || "Failed to submit sourcing request.");
+      snackbar.error("Failed to submit sourcing request.");
     } finally {
       setSubmitting(false);
     }
@@ -149,7 +154,7 @@ function SourceRequestContent() {
           Source Specialized Equipment on Request
         </h1>
         <p style={{ color: "var(--color-muted)", fontSize: "0.95rem" }}>
-          Can’t find the exact camera body, specialized cinema lens, drone replacement module, or studio hardware in Nepal? Sharma Video Care procures it for you.
+          Can’t find the exact camera body, specialized cinema lens, drone replacement module, or studio hardware in Nepal? QuickySewa procures it for you.
         </p>
       </div>
 
@@ -172,11 +177,6 @@ function SourceRequestContent() {
         </div>
       </div>
 
-      {error && (
-        <div style={{ padding: "0.85rem 1rem", background: "#FDF0F0", border: "1px solid var(--color-danger)", color: "var(--color-danger)", borderRadius: "var(--radius-sm)", marginBottom: "1.5rem" }}>
-          <AlertCircle size={18} /> {error}
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} className="card" style={{ padding: "2rem" }}>
         <div className="form-group">
@@ -242,14 +242,75 @@ function SourceRequestContent() {
         </div>
 
         <div className="form-group">
-          <label className="form-label">Reference Link / Image URL (Optional)</label>
-          <input
-            type="url"
-            className="form-input"
-            placeholder="https://... manufacturer or store link"
-            value={referenceUrl}
-            onChange={(e) => setReferenceUrl(e.target.value)}
-          />
+          <label className="form-label">Reference Image or Spec Sheet (Cloudinary Upload)</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <label
+              style={{
+                border: "2px dashed var(--color-border)",
+                borderRadius: "var(--radius-md)",
+                padding: "1rem",
+                textAlign: "center",
+                cursor: "pointer",
+                background: referenceUrl ? "#F0FDF4" : "#FFFFFF",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.4rem",
+              }}
+            >
+              <Upload size={22} color={referenceUrl ? "var(--color-success)" : "var(--color-primary)"} />
+              <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                {uploadingReference
+                  ? "Uploading reference image to Cloudinary..."
+                  : referenceUrl
+                  ? "✓ Reference Photo Attached! Click to replace"
+                  : "Upload camera/lens reference picture or spec sheet"}
+              </span>
+              <span style={{ fontSize: "0.75rem", color: "var(--color-muted)" }}>
+                Helps our procurement team find the exact match
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                disabled={uploadingReference}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setUploadingReference(true);
+                  try {
+                    const url = await uploadToCloudinary(file, "video_care/sourcing");
+                    setReferenceUrl(url);
+                    snackbar.success("Reference photo uploaded to Cloudinary!");
+                  } catch (err: any) {
+                    console.error("Reference upload error:", err);
+                    snackbar.error(err.message || "Failed to upload reference photo.");
+                  } finally {
+                    setUploadingReference(false);
+                  }
+                }}
+              />
+            </label>
+
+            {referenceUrl && (
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", background: "white", padding: "0.5rem", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)" }}>
+                <img src={referenceUrl} alt="Reference Preview" style={{ width: "48px", height: "48px", objectFit: "cover", borderRadius: "4px" }} />
+                <div style={{ flex: 1, minWidth: 0, fontSize: "0.8rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ color: "var(--color-success)", fontWeight: 600 }}>Cloudinary:</span> {referenceUrl}
+                </div>
+              </div>
+            )}
+
+            <input
+              type="url"
+              className="form-input"
+              placeholder="Or paste external manufacturer/store link (https://...)"
+              value={referenceUrl}
+              onChange={(e) => setReferenceUrl(e.target.value)}
+              style={{ fontSize: "0.8rem", padding: "0.4rem 0.6rem" }}
+            />
+          </div>
         </div>
 
         <div className="form-group">

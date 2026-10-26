@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
+import { CloudinaryUpload } from "@/components/CloudinaryUpload";
 import { collection, addDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { useLanguage } from "@/context/LanguageContext";
@@ -33,6 +34,7 @@ import {
   Gift,
   AlertCircle,
 } from "lucide-react";
+import { useSnackbar } from "../../context/SnackbarContext";
 
 export const TradeInCalculator: React.FC = () => {
   const { language } = useLanguage();
@@ -56,12 +58,13 @@ export const TradeInCalculator: React.FC = () => {
   const [customerCity, setCustomerCity] = useState<string>("Janakpur");
   const [fulfillmentType, setFulfillmentType] = useState<"COUNTER_DROP" | "COURIER_PICKUP">("COUNTER_DROP");
   const [notes, setNotes] = useState<string>("");
+  const [photoUrl, setPhotoUrl] = useState<string>("");
 
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [submittedTicket, setSubmittedTicket] = useState<{ id: string; cashVal: string; creditVal: string } | null>(
     null
   );
-  const [error, setError] = useState<string>("");
+  const snackbar = useSnackbar();
 
   // Filtered models for current category
   const categoryModels = useMemo(
@@ -123,12 +126,11 @@ export const TradeInCalculator: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName.trim() || !customerPhone.trim()) {
-      setError(isNe ? "कृपया आफ्नो पूरा नाम र फोन नम्बर प्रविष्ट गर्नुहोस्।" : "Please enter your name and phone number.");
+      snackbar.warning(isNe ? "कृपया आफ्नो पूरा नाम र फोन नम्बर प्रविष्ट गर्नुहोस्।" : "Please enter your name and phone number.");
       return;
     }
 
     setSubmitting(true);
-    setError("");
 
     try {
       const modelTitle = isCustomModel ? customModelName || "Custom Equipment" : currentModel.model;
@@ -149,6 +151,8 @@ export const TradeInCalculator: React.FC = () => {
         estimatedCashValuation: cashStr,
         estimatedCreditValuation: creditStr,
         customerNotes: notes,
+        photoUrl: photoUrl || null,
+        photoUrls: photoUrl ? [photoUrl] : [],
         status: "PENDING_BENCH_TEST",
         createdAt: new Date().toISOString(),
       });
@@ -160,7 +164,7 @@ export const TradeInCalculator: React.FC = () => {
       });
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || "Failed to submit request. Please try again.");
+      snackbar.error("Failed to submit request. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -170,8 +174,8 @@ export const TradeInCalculator: React.FC = () => {
     if (!submittedTicket) return "";
     const modelTitle = isCustomModel ? customModelName || "Equipment" : currentModel.model;
     const text = isNe
-      ? `नमस्ते Sharma Video Care! मैले ट्रेड-इन अनुरोध दर्ता गरेँ (Ticket: TRD-${submittedTicket.id}):\nउपकरण: ${modelTitle}\nअनुमानित नगद: ${submittedTicket.cashVal}\nट्रेड-इन भउचर: ${submittedTicket.creditVal}\nसम्पर्क: ${customerPhone} (${customerName})`
-      : `Hello Sharma Video Care! I submitted a Trade-In request (Ticket: TRD-${submittedTicket.id}):\nDevice: ${modelTitle}\nEstimated Cash: ${submittedTicket.cashVal}\nStore Credit: ${submittedTicket.creditVal}\nContact: ${customerPhone} (${customerName})`;
+      ? `नमस्ते QuickySewa! मैले ट्रेड-इन अनुरोध दर्ता गरेँ (Ticket: TRD-${submittedTicket.id}):\nउपकरण: ${modelTitle}\nअनुमानित नगद: ${submittedTicket.cashVal}\nट्रेड-इन भउचर: ${submittedTicket.creditVal}\nसम्पर्क: ${customerPhone} (${customerName})`
+      : `Hello QuickySewa! I submitted a Trade-In request (Ticket: TRD-${submittedTicket.id}):\nDevice: ${modelTitle}\nEstimated Cash: ${submittedTicket.cashVal}\nStore Credit: ${submittedTicket.creditVal}\nContact: ${customerPhone} (${customerName})`;
 
     return `https://wa.me/9779854022200?text=${encodeURIComponent(text)}`;
   }, [submittedTicket, isCustomModel, customModelName, currentModel, customerName, customerPhone, isNe]);
@@ -845,12 +849,17 @@ export const TradeInCalculator: React.FC = () => {
                 />
               </div>
 
-              {error && (
-                <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#DC2626", borderRadius: "6px", fontSize: "12px", marginBottom: "12px" }}>
-                  <AlertCircle size={14} style={{ display: "inline", marginRight: "4px" }} />
-                  {error}
-                </div>
-              )}
+
+              <div style={{ marginBottom: "16px" }}>
+                <CloudinaryUpload
+                  value={photoUrl}
+                  onChange={(url) => setPhotoUrl(url)}
+                  onRemove={() => setPhotoUrl("")}
+                  folder="video_care/trade_in"
+                  label={isNe ? "उपकरणको तस्बिर (वैकल्पिक)" : "Equipment Photo (Optional)"}
+                  helperText={isNe ? "क्यामेरा, लेन्स वा सिरियल नम्बरको स्पष्ट तस्बिर अपलोड गर्नुहोस्" : "Upload clear photo of the gear, screen, or serial number"}
+                />
+              </div>
 
               <button
                 type="button"

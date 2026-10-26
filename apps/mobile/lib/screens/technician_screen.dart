@@ -4,6 +4,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../services/firestore_service.dart';
 import 'login_screen.dart';
+import '../widgets/svc_snackbar.dart';
 
 class TechnicianPortalScreen extends StatefulWidget {
   final AppState appState;
@@ -59,9 +60,7 @@ class _TechnicianPortalScreenState extends State<TechnicianPortalScreen> {
                   ? null
                   : () async {
                       if (findingsCtrl.text.trim().isEmpty || diagnosisCtrl.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please provide inspection findings and diagnosis.')),
-                        );
+                        SvcSnackbar.show(context, 'Please provide inspection findings and diagnosis.', type: SnackType.warning);
                         return;
                       }
 
@@ -77,16 +76,12 @@ class _TechnicianPortalScreenState extends State<TechnicianPortalScreen> {
 
                         if (context.mounted) {
                           Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Diagnosis submitted! Status moved to "Quote Pending".')),
-                          );
+                          SvcSnackbar.show(context, 'Diagnosis submitted! Status moved to "Quote Pending".', type: SnackType.success);
                         }
                       } catch (e) {
                         setDialogState(() => submitting = false);
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(backgroundColor: SvcColors.danger, content: Text('Error submitting diagnosis: $e')),
-                          );
+                          SvcSnackbar.show(context, 'Couldn\'t submit the diagnosis. Please try again.', type: SnackType.error);
                         }
                       }
                     },
@@ -107,15 +102,11 @@ class _TechnicianPortalScreenState extends State<TechnicianPortalScreen> {
         'updatedAt': DateTime.now().toIso8601String(),
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Job marked as Completed!')),
-        );
+        SvcSnackbar.show(context, 'Job marked as Completed!', type: SnackType.success);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: SvcColors.danger, content: Text('Error updating job: $e')),
-        );
+        SvcSnackbar.show(context, 'Couldn\'t update the job. Please try again.', type: SnackType.error);
       }
     }
   }
@@ -155,7 +146,7 @@ class _TechnicianPortalScreenState extends State<TechnicianPortalScreen> {
                 const SizedBox(height: 6),
                 Text(
                   user != null
-                      ? 'You are currently signed in as ${user.name} (${user.role.toUpperCase()}). Please sign in with an authorized Sharma Video Care technician account to access the workbench.'
+                      ? 'You are currently signed in as ${user.name} (${user.role.toUpperCase()}). Please sign in with a verified QuickySewa technician account to access the workbench.'
                       : 'Please sign in with your technician credentials to access diagnostic tools and assigned jobs.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: SvcColors.muted, fontSize: 13),

@@ -95,7 +95,7 @@ export const HeroSection: React.FC = () => {
               {language === "ne" ? (
                 <>
                   <span style={{ color: "#FF7A1A", display: "inline-block" }}>
-                    शर्मा भिडियो केयर
+                    क्विकीसेवा
                   </span>
                   {" "}— विश्वसनीय मर्मत र प्रामाणिक गियर
                 </>
@@ -103,7 +103,7 @@ export const HeroSection: React.FC = () => {
                 <>
                   Get It Done with{" "}
                   <span style={{ color: "#FF7A1A", display: "inline-block" }}>
-                    Sharma Video Care
+                    QuickySewa
                   </span>
                 </>
               )}

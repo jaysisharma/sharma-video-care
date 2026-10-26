@@ -1,3 +1,4 @@
+import { uploadToCloudinary } from "../../../../lib/cloudinary";
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -7,6 +8,7 @@ import { doc, getDoc, updateDoc, addDoc, collection } from "firebase/firestore";
 import { db } from "../../../../lib/firebase";
 import { OrderRecord, PaymentProof } from "@sharmavideocare/shared";
 import { CheckCircle2, Building2, Upload, ArrowRight, MessageSquare, Truck, Banknote, ShieldCheck } from "lucide-react";
+import { useSnackbar } from "../../../../context/SnackbarContext";
 
 export default function OrderSuccessPage() {
   const params = useParams();
@@ -19,7 +21,9 @@ export default function OrderSuccessPage() {
   const [txnRef, setTxnRef] = useState("");
   const [proofUrl, setProofUrl] = useState("");
   const [submittingProof, setSubmittingProof] = useState(false);
+  const [uploadingProof, setUploadingProof] = useState(false);
   const [proofSubmitted, setProofSubmitted] = useState(false);
+  const snackbar = useSnackbar();
 
   useEffect(() => {
     async function loadOrder() {
@@ -63,9 +67,11 @@ export default function OrderSuccessPage() {
       });
 
       setProofSubmitted(true);
+      snackbar.success("Payment proof submitted. We'll verify it shortly.");
       setOrder((prev) => prev ? { ...prev, paymentStatus: "PENDING_VERIFICATION", orderStatus: "PAYMENT_SUBMITTED" } : null);
     } catch (err) {
       console.error("Proof submission error:", err);
+      snackbar.error("Couldn't submit payment proof. Please try again.");
     } finally {
       setSubmittingProof(false);
     }
@@ -94,7 +100,7 @@ export default function OrderSuccessPage() {
           Order Confirmed!
         </h1>
         <p style={{ color: "var(--color-muted)", fontSize: "1rem" }}>
-          Thank you for choosing Sharma Video Care. Your order reference is <strong>#{orderId?.slice(0, 8)}</strong>.
+          Thank you for choosing QuickySewa. Your order reference is <strong>#{orderId?.slice(0, 8)}</strong>.
         </p>
       </div>
 
@@ -128,14 +134,14 @@ export default function OrderSuccessPage() {
       {order?.paymentMethod === "BANK_TRANSFER" && (
         <div className="card" style={{ marginBottom: "2rem", border: "2px solid #E4DED6", background: "#FAF8F5" }}>
           <h3 style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <Building2 size={20} color="var(--color-primary)" /> Sharma Video Care Official Bank Account
+            <Building2 size={20} color="var(--color-primary)" /> QuickySewa Official Bank Account
           </h3>
 
           <div style={{ background: "var(--color-surface)", padding: "1.25rem", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)", marginBottom: "1.5rem", fontSize: "0.9rem" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
               <div>Bank Name: <strong>Rastriya Banijya Bank</strong></div>
               <div>Branch: <strong>Janakpur Branch</strong></div>
-              <div>Account Name: <strong>Sharma Video Care</strong></div>
+              <div>Account Name: <strong>QuickySewa</strong></div>
               <div>Account Number: <strong>10400019283748</strong></div>
             </div>
             <div style={{ marginTop: "0.85rem", fontSize: "0.8rem", color: "var(--color-muted)" }}>
@@ -166,14 +172,75 @@ export default function OrderSuccessPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Voucher / Screenshot Image URL (Optional)</label>
-                <input
-                  type="url"
-                  className="form-input"
-                  placeholder="https://... photo link of receipt or voucher"
-                  value={proofUrl}
-                  onChange={(e) => setProofUrl(e.target.value)}
-                />
+                <label className="form-label">Deposit Voucher / Transfer Slip (Cloudinary Upload)</label>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  <label
+                    style={{
+                      border: "2px dashed var(--color-border)",
+                      borderRadius: "var(--radius-md)",
+                      padding: "1.25rem",
+                      textAlign: "center",
+                      cursor: "pointer",
+                      background: proofUrl ? "#F0FDF4" : "#FFFFFF",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <Upload size={24} color={proofUrl ? "var(--color-success)" : "var(--color-primary)"} />
+                    <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+                      {uploadingProof
+                        ? "Uploading receipt to Cloudinary..."
+                        : proofUrl
+                        ? "✓ Voucher Attached! Click to replace"
+                        : "Click to upload voucher screenshot or photo"}
+                    </span>
+                    <span style={{ fontSize: "0.75rem", color: "var(--color-muted)" }}>
+                      PNG, JPG, WebP up to 10MB
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      disabled={uploadingProof}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploadingProof(true);
+                        try {
+                          const url = await uploadToCloudinary(file, "video_care/payments");
+                          setProofUrl(url);
+                          snackbar.success("Payment voucher uploaded to Cloudinary!");
+                        } catch (err: any) {
+                          console.error("Voucher upload error:", err);
+                          snackbar.error(err.message || "Failed to upload receipt.");
+                        } finally {
+                          setUploadingProof(false);
+                        }
+                      }}
+                    />
+                  </label>
+
+                  {proofUrl && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", background: "white", padding: "0.5rem", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)" }}>
+                      <img src={proofUrl} alt="Voucher Preview" style={{ width: "48px", height: "48px", objectFit: "cover", borderRadius: "4px" }} />
+                      <div style={{ flex: 1, minWidth: 0, fontSize: "0.8rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <span style={{ color: "var(--color-success)", fontWeight: 600 }}>Cloudinary:</span> {proofUrl}
+                      </div>
+                    </div>
+                  )}
+
+                  <input
+                    type="url"
+                    className="form-input"
+                    placeholder="Or paste voucher URL (https://...)"
+                    value={proofUrl}
+                    onChange={(e) => setProofUrl(e.target.value)}
+                    style={{ fontSize: "0.8rem", padding: "0.4rem 0.6rem" }}
+                  />
+                </div>
               </div>
 
               <button

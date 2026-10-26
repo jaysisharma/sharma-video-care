@@ -1,37 +1,61 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
 import '../services/firestore_service.dart';
 
 class AppState extends ChangeNotifier {
   static const String _kIsLoggedIn = 'svc_is_logged_in';
   static const String _kUserId = 'svc_user_id';
-  static const String _kUserName = 'svc_user_name';
-  static const String _kUserEmail = 'svc_user_email';
-  static const String _kUserPhone = 'svc_user_phone';
+  // Legacy keys that cached name/email/phone in plain SharedPreferences; now removed on load.
+  static const List<String> _kLegacyPiiKeys = ['svc_user_name', 'svc_user_email', 'svc_user_phone'];
   static const String _kUserRole = 'svc_user_role';
   static const String _kUserTechType = 'svc_user_tech_type';
-  static const String _kUserPersonaId = 'svc_user_persona_id';
+  static const String _kSelectedDeliveryHub = 'svc_selected_delivery_hub';
 
-  DemoPersona _currentPersona = kDemoPersonas[0];
   UserModel? _currentUser;
   bool _isAuthenticated = false;
   bool _isSessionLoaded = false;
+  // True while signIn/signUp run; they load the profile themselves, so the auth
+  // listener must not race them with a fallback profile write.
+  bool _authInFlight = false;
+  Future<void>? _sessionReconcile;
+  static const Duration _profileTimeout = Duration(seconds: 6);
   final List<CartItemModel> _cartItems = [];
+  String _selectedDeliveryHub = 'Janakpur Hub';
+  List<UserAddress> _savedAddresses = [];
+  List<RegisteredGear> _registeredGear = [];
 
-  DemoPersona get currentPersona => _currentPersona;
+  final List<NotificationItemModel> _notifications = [];
+
   UserModel? get currentUser => _currentUser;
-  bool get isAuthenticated => _isAuthenticated;
+  bool get isAuthenticated => _isAuthenticated && _currentUser != null;
   bool get isSessionLoaded => _isSessionLoaded;
-  String get role => _currentUser?.role ?? _currentPersona.role;
-  String? get technicianType => _currentUser?.technicianType ?? _currentPersona.technicianType;
+  String get role => _currentUser?.role ?? 'customer';
+  String? get technicianType => _currentUser?.technicianType;
+  String get selectedDeliveryHub => _selectedDeliveryHub;
 
   List<CartItemModel> get cartItems => List.unmodifiable(_cartItems);
   int get cartCount => _cartItems.fold(0, (acc, item) => acc + item.quantity);
-  int get cartSubtotal => _cartItems.fold(0, (acc, item) => acc + item.totalPrice);
+  int get cartSubtotal =>
+      _cartItems.fold(0, (acc, item) => acc + item.totalPrice);
   int get deliveryFee => _cartItems.isNotEmpty ? 150 : 0;
   int get cartTotal => cartSubtotal + deliveryFee;
+
+  int getItemQuantity(String productId) {
+    final idx = _cartItems.indexWhere((i) => i.productId == productId);
+    return idx != -1 ? _cartItems[idx].quantity : 0;
+  }
+
+  List<NotificationItemModel> get notifications =>
+      List.unmodifiable(_notifications);
+  int get unreadNotificationCount =>
+      _notifications.where((n) => !n.isRead).length;
+
+  List<UserAddress> get savedAddresses => List.unmodifiable(_savedAddresses);
+  List<RegisteredGear> get registeredGear => List.unmodifiable(_registeredGear);
 
   AppState() {
     _initAuthListener();
@@ -40,10 +64,15 @@ class AppState extends ChangeNotifier {
   void _initAuthListener() {
     try {
       FirestoreService().auth.authStateChanges().listen((fbUser) async {
+        if (_authInFlight) return;
         if (fbUser != null && !fbUser.isAnonymous) {
           if (_currentUser?.id != fbUser.uid || !_isAuthenticated) {
             await _syncFirebaseUser(fbUser);
           }
+        } else if (_isAuthenticated) {
+          _clearUserState();
+          await _saveSessionToPrefs();
+          notifyListeners();
         }
       });
     } catch (e) {
@@ -51,242 +80,340 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Synchronizes Firebase User and Firestore profile with AppState and SharedPreferences
-  Future<void> _syncFirebaseUser(dynamic fbUser) async {
+  void _clearUserState() {
+    _currentUser = null;
+    _isAuthenticated = false;
+    _savedAddresses = [];
+    _registeredGear = [];
+    _notifications.clear();
+  }
+
+  /// Loads the Firestore profile for [fbUser] and makes it the current user.
+  /// Creates a customer profile when none exists. If Firestore is unreachable the
+  /// user stays signed in with the last known role. Deactivated accounts are signed
+  /// out; with [throwIfBlocked] the caller gets a `user-disabled` error to show.
+  Future<void> _syncFirebaseUser(User fbUser, {bool throwIfBlocked = false}) async {
+    final fallbackName = (fbUser.displayName?.isNotEmpty ?? false)
+        ? fbUser.displayName!
+        : (fbUser.email?.split('@').first ?? 'Customer');
+    final sameUser = _currentUser?.id == fbUser.uid;
+
+    UserModel profile = UserModel(
+      id: fbUser.uid,
+      name: sameUser ? _currentUser!.name : fallbackName,
+      email: fbUser.email ?? '',
+      phone: sameUser ? _currentUser!.phone : (fbUser.phoneNumber ?? ''),
+      role: sameUser ? _currentUser!.role : 'customer',
+      technicianType: sameUser ? _currentUser!.technicianType : null,
+      status: 'ACTIVE',
+      createdAt: fbUser.metadata.creationTime ?? DateTime.now(),
+    );
+
     try {
-      String name = fbUser.displayName ?? '';
-      if (name.isEmpty && fbUser.email != null && fbUser.email!.isNotEmpty) {
-        name = fbUser.email!.split('@')[0];
+      final doc = await FirestoreService()
+          .db
+          .collection('users')
+          .doc(fbUser.uid)
+          .get()
+          .timeout(_profileTimeout);
+      if (doc.exists && doc.data() != null) {
+        profile = UserModel.fromFirestore(fbUser.uid, doc.data()!);
+      } else {
+        profile = await FirestoreService()
+            .createCustomerProfile(user: fbUser, name: fallbackName, email: fbUser.email ?? '', phone: fbUser.phoneNumber ?? '')
+            .timeout(_profileTimeout);
       }
-      if (name.isEmpty) name = 'Customer';
+    } catch (e) {
+      debugPrint('Profile load failed, using last known profile: $e');
+    }
 
-      String email = fbUser.email ?? '';
-      String phone = fbUser.phoneNumber ?? '';
-      String role = 'customer';
-      String? techType;
-      String status = 'ACTIVE';
-      DateTime createdAt = fbUser.metadata?.creationTime ?? DateTime.now();
-
-      try {
-        final doc = await FirestoreService().db.collection('users').doc(fbUser.uid).get();
-        if (doc.exists && doc.data() != null) {
-          final data = doc.data()!;
-          name = data['name'] ?? name;
-          email = data['email'] ?? email;
-          phone = data['phone'] ?? phone;
-          role = data['role'] ?? role;
-          techType = data['technicianType'];
-          status = data['status'] ?? status;
-          createdAt = DateTime.tryParse(data['createdAt'] ?? '') ?? createdAt;
-        } else {
-          // If Firestore user doc doesn't exist yet, save it
-          await FirestoreService().db.collection('users').doc(fbUser.uid).set({
-            'name': name,
-            'email': email,
-            'phone': phone,
-            'role': role,
-            'status': status,
-            'createdAt': createdAt.toIso8601String(),
-            'updatedAt': DateTime.now().toIso8601String(),
-          }, SetOptions(merge: true));
-        }
-      } catch (err) {
-        debugPrint('Firestore profile fetch notice: $err');
-      }
-
-      _currentUser = UserModel(
-        id: fbUser.uid,
-        name: name,
-        email: email,
-        phone: phone,
-        role: role,
-        technicianType: techType,
-        status: status,
-        createdAt: createdAt,
-      );
-
-      _currentPersona = DemoPersona(
-        id: _currentUser!.id,
-        name: _currentUser!.name,
-        email: _currentUser!.email,
-        phone: _currentUser!.phone,
-        role: _currentUser!.role,
-        technicianType: _currentUser!.technicianType,
-        label: _currentUser!.name,
-      );
-
-      _isAuthenticated = true;
+    if (profile.status != 'ACTIVE') {
+      await FirestoreService().signOut();
+      _clearUserState();
       await _saveSessionToPrefs();
       notifyListeners();
+      if (throwIfBlocked) throw FirebaseAuthException(code: 'user-disabled');
+      return;
+    }
+
+    _currentUser = profile;
+    _isAuthenticated = true;
+    await _loadUserData(fbUser.uid);
+    await _saveSessionToPrefs();
+    notifyListeners();
+  }
+
+  Future<void> _loadUserData(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final addrRaw = prefs.getString('svc_addresses_$userId');
+      if (addrRaw != null && addrRaw.isNotEmpty) {
+        final List list = jsonDecode(addrRaw);
+        _savedAddresses = list
+            .map((e) => UserAddress.fromMap(Map<String, dynamic>.from(e)))
+            .toList();
+      } else {
+        _savedAddresses = [];
+      }
+
+      final gearRaw = prefs.getString('svc_gear_$userId');
+      if (gearRaw != null && gearRaw.isNotEmpty) {
+        final List list = jsonDecode(gearRaw);
+        _registeredGear = list
+            .map((e) => RegisteredGear.fromMap(Map<String, dynamic>.from(e)))
+            .toList();
+      } else {
+        _registeredGear = [];
+      }
     } catch (e) {
-      debugPrint('Failed to sync Firebase user: $e');
+      debugPrint('Error loading user data: $e');
     }
   }
 
-  /// Loads persisted user session on app start
-  Future<void> loadSession() async {
-    // 1. Instant local restore from SharedPreferences (if available)
+  Future<void> _saveUserData(String userId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final isLoggedIn = prefs.getBool(_kIsLoggedIn) ?? false;
-
-      if (isLoggedIn) {
-        final personaId = prefs.getString(_kUserPersonaId);
-        final email = prefs.getString(_kUserEmail) ?? '';
-        final name = prefs.getString(_kUserName) ?? '';
-        final phone = prefs.getString(_kUserPhone) ?? '';
-        final role = prefs.getString(_kUserRole) ?? 'customer';
-        final techType = prefs.getString(_kUserTechType);
-        final id = prefs.getString(_kUserId) ?? 'user-1';
-
-        DemoPersona? matched;
-        if (personaId != null) {
-          for (final p in kDemoPersonas) {
-            if (p.id == personaId) {
-              matched = p;
-              break;
-            }
-          }
-        }
-        if (matched == null && email.isNotEmpty) {
-          for (final p in kDemoPersonas) {
-            if (p.email.toLowerCase() == email.toLowerCase()) {
-              matched = p;
-              break;
-            }
-          }
-        }
-
-        if (matched != null) {
-          _currentPersona = matched;
-          _currentUser = UserModel.fromPersona(matched);
-        } else {
-          final persona = DemoPersona(
-            id: id,
-            name: name.isNotEmpty ? name : 'Customer',
-            email: email,
-            phone: phone,
-            role: role,
-            technicianType: techType,
-            label: name.isNotEmpty ? name : 'Customer',
-          );
-          _currentPersona = persona;
-          _currentUser = UserModel.fromPersona(persona);
-        }
-        _isAuthenticated = true;
-      }
+      await prefs.setString(
+        'svc_addresses_$userId',
+        jsonEncode(_savedAddresses.map((a) => a.toMap()).toList()),
+      );
+      await prefs.setString(
+        'svc_gear_$userId',
+        jsonEncode(_registeredGear.map((g) => g.toMap()).toList()),
+      );
     } catch (e) {
-      debugPrint('Local prefs cache note (will use live Firebase Auth): $e');
+      debugPrint('Error saving user data: $e');
     }
+  }
 
-    // 2. Check live Firebase Auth user (independently of SharedPreferences)
+  Future<void> addAddress(UserAddress address) async {
+    if (_currentUser == null) return;
+    if (address.isDefault) {
+      _savedAddresses =
+          _savedAddresses.map((a) => a.copyWith(isDefault: false)).toList();
+    }
+    _savedAddresses.add(address);
+    await _saveUserData(_currentUser!.id);
+    notifyListeners();
+  }
+
+  Future<void> removeAddress(String id) async {
+    if (_currentUser == null) return;
+    _savedAddresses.removeWhere((a) => a.id == id);
+    if (_savedAddresses.isNotEmpty &&
+        !_savedAddresses.any((a) => a.isDefault)) {
+      _savedAddresses[0] = _savedAddresses[0].copyWith(isDefault: true);
+    }
+    await _saveUserData(_currentUser!.id);
+    notifyListeners();
+  }
+
+  Future<void> setDefaultAddress(String id) async {
+    if (_currentUser == null) return;
+    _savedAddresses =
+        _savedAddresses.map((a) => a.copyWith(isDefault: a.id == id)).toList();
+    await _saveUserData(_currentUser!.id);
+    notifyListeners();
+  }
+
+  Future<void> registerGear(RegisteredGear gear) async {
+    if (_currentUser == null) return;
+    _registeredGear.add(gear);
+    await _saveUserData(_currentUser!.id);
+    notifyListeners();
+  }
+
+  Future<void> removeGear(String id) async {
+    if (_currentUser == null) return;
+    _registeredGear.removeWhere((g) => g.id == id);
+    await _saveUserData(_currentUser!.id);
+    notifyListeners();
+  }
+
+  /// Restores the session on app start without waiting on the network: Firebase Auth
+  /// persists the signed-in user securely, so we show it immediately (with the last
+  /// known role) and reconcile with Firestore in the background.
+  Future<void> loadSession() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      for (final key in _kLegacyPiiKeys) {
+        await prefs.remove(key);
+      }
+
+      final savedHub = prefs.getString(_kSelectedDeliveryHub);
+      if (savedHub != null && savedHub.isNotEmpty) {
+        _selectedDeliveryHub = savedHub;
+      }
+
       final fbUser = FirestoreService().auth.currentUser;
       if (fbUser != null && !fbUser.isAnonymous) {
-        await _syncFirebaseUser(fbUser);
+        final cachedForThisUser = prefs.getString(_kUserId) == fbUser.uid;
+        _currentUser = UserModel(
+          id: fbUser.uid,
+          name: (fbUser.displayName?.isNotEmpty ?? false) ? fbUser.displayName! : (fbUser.email?.split('@').first ?? 'Customer'),
+          email: fbUser.email ?? '',
+          phone: '',
+          role: cachedForThisUser ? (prefs.getString(_kUserRole) ?? 'customer') : 'customer',
+          technicianType: cachedForThisUser ? prefs.getString(_kUserTechType) : null,
+          status: 'ACTIVE',
+          createdAt: fbUser.metadata.creationTime ?? DateTime.now(),
+        );
+        _isAuthenticated = true;
+        await _loadUserData(fbUser.uid);
+        _sessionReconcile = _syncFirebaseUser(fbUser);
+      } else {
+        _clearUserState();
+        await _saveSessionToPrefs();
       }
     } catch (e) {
-      debugPrint('Firebase Auth restore note: $e');
+      debugPrint('Session restore note: $e');
     } finally {
       _isSessionLoaded = true;
       notifyListeners();
     }
   }
 
+  /// Completes when the background profile check from [loadSession] finishes,
+  /// or after [timeout] so a slow network never blocks the app.
+  Future<void> waitForSession({Duration timeout = const Duration(seconds: 4)}) async {
+    final pending = _sessionReconcile;
+    if (pending == null) return;
+    await pending.timeout(timeout, onTimeout: () {});
+  }
+
   Future<void> _saveSessionToPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (_isAuthenticated && _currentUser != null) {
+        // Only non-identifying data: uid and role, used to restore the UI quickly.
         await prefs.setBool(_kIsLoggedIn, true);
         await prefs.setString(_kUserId, _currentUser!.id);
-        await prefs.setString(_kUserName, _currentUser!.name);
-        await prefs.setString(_kUserEmail, _currentUser!.email);
-        await prefs.setString(_kUserPhone, _currentUser!.phone);
         await prefs.setString(_kUserRole, _currentUser!.role);
         if (_currentUser!.technicianType != null) {
           await prefs.setString(_kUserTechType, _currentUser!.technicianType!);
         } else {
           await prefs.remove(_kUserTechType);
         }
-        await prefs.setString(_kUserPersonaId, _currentPersona.id);
       } else {
         await prefs.setBool(_kIsLoggedIn, false);
         await prefs.remove(_kUserId);
-        await prefs.remove(_kUserName);
-        await prefs.remove(_kUserEmail);
-        await prefs.remove(_kUserPhone);
         await prefs.remove(_kUserRole);
         await prefs.remove(_kUserTechType);
-        await prefs.remove(_kUserPersonaId);
       }
     } catch (e) {
       debugPrint('Local storage note: $e');
     }
   }
 
-  Future<void> switchPersona(DemoPersona persona) async {
-    _currentPersona = persona;
-    _currentUser = UserModel.fromPersona(persona);
-    _isAuthenticated = true;
-    await _saveSessionToPrefs();
-    notifyListeners();
+  Future<void> signIn(String email, String password) async {
+    _authInFlight = true;
+    try {
+      final fbUser = await FirestoreService().signIn(email: email, password: password);
+      await _syncFirebaseUser(fbUser, throwIfBlocked: true);
+    } finally {
+      _authInFlight = false;
+    }
   }
 
-  Future<bool> signIn(String email, String password) async {
-    final user = await FirestoreService().signIn(
-      email: email,
-      password: password,
-    );
-
-    _currentUser = user;
-    _currentPersona = DemoPersona(
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      technicianType: user.technicianType,
-      label: user.name,
-    );
-    _isAuthenticated = true;
-    await _saveSessionToPrefs();
-    notifyListeners();
-    return true;
+  Future<void> signInWithGoogle() async {
+    _authInFlight = true;
+    try {
+      final fbUser = await FirestoreService().signInWithGoogle();
+      await _syncFirebaseUser(fbUser, throwIfBlocked: true);
+    } finally {
+      _authInFlight = false;
+    }
   }
 
-  Future<bool> signUp({
+  Future<void> signInWithApple() async {
+    _authInFlight = true;
+    try {
+      final fbUser = await FirestoreService().signInWithApple();
+      await _syncFirebaseUser(fbUser, throwIfBlocked: true);
+    } finally {
+      _authInFlight = false;
+    }
+  }
+
+  bool get hasPasswordSignIn => FirestoreService().hasPasswordSignIn;
+
+  Future<void> signUp({
     required String name,
     required String email,
     required String phone,
     required String password,
   }) async {
-    final user = await FirestoreService().signUp(
+    _authInFlight = true;
+    try {
+      final user = await FirestoreService().signUp(
+        name: name,
+        email: email,
+        phone: phone,
+        password: password,
+      );
+      _currentUser = user;
+      _isAuthenticated = true;
+      await _loadUserData(user.id);
+      await _saveSessionToPrefs();
+      notifyListeners();
+    } finally {
+      _authInFlight = false;
+    }
+  }
+
+  Future<bool> updateUserProfile({
+    required String name,
+    required String phone,
+  }) async {
+    if (_currentUser == null) return false;
+
+    await FirestoreService().updateUserProfile(
+      uid: _currentUser!.id,
       name: name,
-      email: email,
       phone: phone,
-      password: password,
     );
 
-    _currentUser = user;
-    _currentPersona = DemoPersona(
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      technicianType: user.technicianType,
-      label: user.name,
+    _currentUser = _currentUser!.copyWith(
+      name: name.trim(),
+      phone: phone.trim(),
     );
-    _isAuthenticated = true;
+
     await _saveSessionToPrefs();
     notifyListeners();
     return true;
   }
 
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await FirestoreService().changePassword(
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+    );
+  }
+
+  bool get isEmailVerified => FirestoreService().isEmailVerified;
+
+  Future<void> resendVerificationEmail() =>
+      FirestoreService().resendVerificationEmail();
+
+  Future<void> deleteAccount({String? currentPassword}) async {
+    final uid = _currentUser?.id;
+    await FirestoreService().deleteAccount(currentPassword: currentPassword);
+    if (uid != null) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('svc_addresses_$uid');
+        await prefs.remove('svc_gear_$uid');
+      } catch (_) {}
+    }
+    await signOut();
+  }
+
   Future<void> signOut() async {
     await FirestoreService().signOut();
-    _isAuthenticated = false;
-    _currentUser = null;
+    _clearUserState();
     await _saveSessionToPrefs();
     notifyListeners();
   }
@@ -297,7 +424,8 @@ class AppState extends ChangeNotifier {
   }
 
   void addToCart(CartItemModel newItem) {
-    final existingIndex = _cartItems.indexWhere((i) => i.productId == newItem.productId);
+    final existingIndex =
+        _cartItems.indexWhere((i) => i.productId == newItem.productId);
     if (existingIndex != -1) {
       _cartItems[existingIndex].quantity += newItem.quantity;
     } else {
@@ -325,6 +453,64 @@ class AppState extends ChangeNotifier {
 
   void clearCart() {
     _cartItems.clear();
+    notifyListeners();
+  }
+
+  void setDeliveryHub(String hub) async {
+    _selectedDeliveryHub = hub;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kSelectedDeliveryHub, hub);
+    } catch (_) {}
+  }
+
+  void markNotificationAsRead(String id) {
+    final index = _notifications.indexWhere((n) => n.id == id);
+    if (index != -1 && !_notifications[index].isRead) {
+      _notifications[index] = _notifications[index].copyWith(isRead: true);
+      notifyListeners();
+    }
+  }
+
+  void toggleNotificationRead(String id) {
+    final index = _notifications.indexWhere((n) => n.id == id);
+    if (index != -1) {
+      _notifications[index] = _notifications[index].copyWith(
+        isRead: !_notifications[index].isRead,
+      );
+      notifyListeners();
+    }
+  }
+
+  void markAllNotificationsAsRead() {
+    bool changed = false;
+    for (int i = 0; i < _notifications.length; i++) {
+      if (!_notifications[i].isRead) {
+        _notifications[i] = _notifications[i].copyWith(isRead: true);
+        changed = true;
+      }
+    }
+    if (changed) notifyListeners();
+  }
+
+  void removeNotification(String id) {
+    _notifications.removeWhere((n) => n.id == id);
+    notifyListeners();
+  }
+
+  void clearAllNotifications() {
+    _notifications.clear();
+    notifyListeners();
+  }
+
+  void clearReadNotifications() {
+    _notifications.removeWhere((n) => n.isRead);
+    notifyListeners();
+  }
+
+  void addNotification(NotificationItemModel item) {
+    _notifications.insert(0, item);
     notifyListeners();
   }
 }

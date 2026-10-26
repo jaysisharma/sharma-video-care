@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { Logo } from "./Logo";
+import { NotificationBell } from "./NotificationBell";
 import {
   Search,
   User,
@@ -31,6 +32,7 @@ import {
 } from "lucide-react";
 import { SHOP_PRODUCTS } from "@/data/shopProducts";
 import { useLanguage } from "../context/LanguageContext";
+import { useSnackbar } from "../context/SnackbarContext";
 
 export const Navbar: React.FC = () => {
   const router = useRouter();
@@ -38,6 +40,7 @@ export const Navbar: React.FC = () => {
   const { user, role, firebaseUser, signOut } = useAuth();
   const { totalCount } = useCart();
   const { language, setLanguage, toggleLanguage, t } = useLanguage();
+  const snackbar = useSnackbar();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -377,39 +380,9 @@ export const Navbar: React.FC = () => {
             {/* Show notifications & chat ONLY when logged in */}
             {isLoggedIn && (
               <>
-                <button
-                  type="button"
-                  className="nav-desktop-only"
-                  title="Notifications"
-                  style={{
-                    width: "36px",
-                    height: "36px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: "50%",
-                    color: "#4B443B",
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    position: "relative",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#F5F3EF")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                >
-                  <Bell size={18} strokeWidth={1.8} />
-                  <span
-                    style={{
-                      position: "absolute",
-                      top: "7px",
-                      right: "8px",
-                      width: "7px",
-                      height: "7px",
-                      borderRadius: "50%",
-                      backgroundColor: "#E86F1C",
-                    }}
-                  />
-                </button>
+                <div className="nav-desktop-only">
+                  <NotificationBell />
+                </div>
 
                 <Link
                   href="/chat"
@@ -687,7 +660,7 @@ export const Navbar: React.FC = () => {
                         type="button"
                         onClick={() => {
                           setProfileOpen(false);
-                          signOut();
+                          signOut().then(() => snackbar.success(t("auth.signedOut")));
                         }}
                         style={{
                           width: "100%",
@@ -711,6 +684,9 @@ export const Navbar: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+            <div className="nav-mobile-only" style={{ marginRight: "4px" }}>
+              <NotificationBell isMobile />
             </div>
             {/* Mobile Menu Button */}
             <button
