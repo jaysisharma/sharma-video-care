@@ -62,6 +62,7 @@ class AppState extends ChangeNotifier {
   }
 
   void _initAuthListener() {
+    if (!FirestoreService().isFirebaseAvailable) return;
     try {
       FirestoreService().auth.authStateChanges().listen((fbUser) async {
         if (_authInFlight) return;

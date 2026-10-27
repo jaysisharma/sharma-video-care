@@ -52,7 +52,12 @@ class _ShopScreenState extends State<ShopScreen> {
   @override
   void initState() {
     super.initState();
-    _productsStream = FirestoreService().streamProducts();
+    try {
+      _productsStream = FirestoreService().streamProducts();
+    } catch (e) {
+      debugPrint('ShopScreen products stream error: $e');
+      _productsStream = Stream.value(const <ProductModel>[]);
+    }
     _scrollController.addListener(_onScroll);
   }
 

@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
@@ -10,13 +11,33 @@ class FirestoreService {
   factory FirestoreService() => _instance;
   FirestoreService._internal();
 
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  bool get isFirebaseAvailable => Firebase.apps.isNotEmpty;
 
-  FirebaseAuth get auth => _auth;
-  FirebaseFirestore get db => _db;
+  FirebaseFirestore get db {
+    if (Firebase.apps.isEmpty) {
+      throw StateError("Firebase has not been initialized yet.");
+    }
+    return FirebaseFirestore.instance;
+  }
 
-  User? get currentFirebaseUser => _auth.currentUser;
+  FirebaseAuth get auth {
+    if (Firebase.apps.isEmpty) {
+      throw StateError("Firebase has not been initialized yet.");
+    }
+    return FirebaseAuth.instance;
+  }
+
+  FirebaseFirestore get _db => db;
+  FirebaseAuth get _auth => auth;
+
+  User? get currentFirebaseUser {
+    if (!isFirebaseAvailable) return null;
+    try {
+      return auth.currentUser;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Unguessable customer id for guest orders/requests ("guest-<32 hex chars>"),
   /// matching isGuestId() in firestore.rules.
@@ -294,19 +315,53 @@ class FirestoreService {
   // ----------------------------------------------------------------------
 
   Stream<List<ProductModel>> streamProducts() {
-    return _db.collection('products').snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) {
-        return ProductModel.fromFirestore(doc.id, doc.data());
-      }).toList();
-    });
+    if (!isFirebaseAvailable) {
+      return Stream.value(const <ProductModel>[]);
+    }
+    try {
+      return _db.collection('products').snapshots().map((snapshot) {
+        final list = <ProductModel>[];
+        for (final doc in snapshot.docs) {
+          try {
+            list.add(ProductModel.fromFirestore(doc.id, doc.data()));
+          } catch (e) {
+            debugPrint('Failed to parse product ${doc.id}: $e');
+          }
+        }
+        return list;
+      }).handleError((Object error) {
+        debugPrint('Firestore streamProducts error: $error');
+        return const <ProductModel>[];
+      });
+    } catch (e) {
+      debugPrint('Firestore streamProducts init error: $e');
+      return Stream.value(const <ProductModel>[]);
+    }
   }
 
   Stream<List<UsedProductModel>> streamUsedProducts() {
-    return _db.collection('usedProducts').snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) {
-        return UsedProductModel.fromFirestore(doc.id, doc.data());
-      }).toList();
-    });
+    if (!isFirebaseAvailable) {
+      return Stream.value(const <UsedProductModel>[]);
+    }
+    try {
+      return _db.collection('usedProducts').snapshots().map((snapshot) {
+        final list = <UsedProductModel>[];
+        for (final doc in snapshot.docs) {
+          try {
+            list.add(UsedProductModel.fromFirestore(doc.id, doc.data()));
+          } catch (e) {
+            debugPrint('Failed to parse used product ${doc.id}: $e');
+          }
+        }
+        return list;
+      }).handleError((Object error) {
+        debugPrint('Firestore streamUsedProducts error: $error');
+        return const <UsedProductModel>[];
+      });
+    } catch (e) {
+      debugPrint('Firestore streamUsedProducts init error: $e');
+      return Stream.value(const <UsedProductModel>[]);
+    }
   }
 
   // ----------------------------------------------------------------------
@@ -546,13 +601,32 @@ class FirestoreService {
   }
 
   Stream<List<SourceRequestModel>> streamSourceRequests({String? customerId}) {
-    Query<Map<String, dynamic>> query = _db.collection('sourceRequests');
-    if (customerId != null) {
-      query = query.where('customerId', isEqualTo: customerId);
+    if (!isFirebaseAvailable) {
+      return Stream.value(const <SourceRequestModel>[]);
     }
-    return query.snapshots().map((snap) => snap.docs
-        .map((d) => SourceRequestModel.fromFirestore(d.id, d.data()))
-        .toList());
+    try {
+      Query<Map<String, dynamic>> query = _db.collection('sourceRequests');
+      if (customerId != null) {
+        query = query.where('customerId', isEqualTo: customerId);
+      }
+      return query.snapshots().map((snap) {
+        final list = <SourceRequestModel>[];
+        for (final d in snap.docs) {
+          try {
+            list.add(SourceRequestModel.fromFirestore(d.id, d.data()));
+          } catch (e) {
+            debugPrint('Failed to parse source request ${d.id}: $e');
+          }
+        }
+        return list;
+      }).handleError((Object error) {
+        debugPrint('Firestore streamSourceRequests error: $error');
+        return const <SourceRequestModel>[];
+      });
+    } catch (e) {
+      debugPrint('Firestore streamSourceRequests init error: $e');
+      return Stream.value(const <SourceRequestModel>[]);
+    }
   }
 
   Stream<List<SourceRequestModel>> streamCustomerSourceRequests(String customerId) =>
@@ -563,15 +637,34 @@ class FirestoreService {
   // ----------------------------------------------------------------------
 
   Stream<List<ChatMessageModel>> streamMessages(String conversationId) {
-    return _db
-        .collection('conversations')
-        .doc(conversationId)
-        .collection('messages')
-        .orderBy('createdAt', descending: false)
-        .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => ChatMessageModel.fromFirestore(d.id, d.data()))
-            .toList());
+    if (!isFirebaseAvailable) {
+      return Stream.value(const <ChatMessageModel>[]);
+    }
+    try {
+      return _db
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .orderBy('createdAt', descending: false)
+          .snapshots()
+          .map((snap) {
+            final list = <ChatMessageModel>[];
+            for (final d in snap.docs) {
+              try {
+                list.add(ChatMessageModel.fromFirestore(d.id, d.data()));
+              } catch (e) {
+                debugPrint('Failed to parse chat message ${d.id}: $e');
+              }
+            }
+            return list;
+          }).handleError((Object error) {
+            debugPrint('Firestore streamMessages error: $error');
+            return const <ChatMessageModel>[];
+          });
+    } catch (e) {
+      debugPrint('Firestore streamMessages init error: $e');
+      return Stream.value(const <ChatMessageModel>[]);
+    }
   }
 
   Future<void> sendChatMessage({
@@ -617,24 +710,41 @@ class FirestoreService {
     String? userId,
     bool isGuest = false,
   }) {
-    return _db.collection('notifications').snapshots().map((snapshot) {
-      final list = snapshot.docs.map((d) {
-        return NotificationItemModel.fromFirestore(d.id, d.data());
-      }).where((n) {
-        final target = n.targetGroup?.toLowerCase() ?? 'all';
-        if (target == 'all') return true;
-        if (isGuest) {
-          return target == 'guest' || n.userId == 'guest';
-        } else {
-          return target == 'users' ||
-              n.userId == 'users' ||
-              (userId != null && n.userId == userId);
+    if (!isFirebaseAvailable) {
+      return Stream.value(const <NotificationItemModel>[]);
+    }
+    try {
+      return _db.collection('notifications').snapshots().map((snapshot) {
+        final list = <NotificationItemModel>[];
+        for (final d in snapshot.docs) {
+          try {
+            list.add(NotificationItemModel.fromFirestore(d.id, d.data()));
+          } catch (e) {
+            debugPrint('Failed to parse notification ${d.id}: $e');
+          }
         }
-      }).toList();
+        final filtered = list.where((n) {
+          final target = n.targetGroup?.toLowerCase() ?? 'all';
+          if (target == 'all') return true;
+          if (isGuest) {
+            return target == 'guest' || n.userId == 'guest';
+          } else {
+            return target == 'users' ||
+                n.userId == 'users' ||
+                (userId != null && n.userId == userId);
+          }
+        }).toList();
 
-      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      return list;
-    });
+        filtered.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        return filtered;
+      }).handleError((Object error) {
+        debugPrint('Firestore streamNotifications error: $error');
+        return const <NotificationItemModel>[];
+      });
+    } catch (e) {
+      debugPrint('Firestore streamNotifications init error: $e');
+      return Stream.value(const <NotificationItemModel>[]);
+    }
   }
 
   Future<void> markNotificationRead(String notificationId, {String? userId}) async {

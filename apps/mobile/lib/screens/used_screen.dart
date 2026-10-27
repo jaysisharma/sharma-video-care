@@ -25,9 +25,21 @@ class UsedProductsScreen extends StatefulWidget {
 
 class _UsedProductsScreenState extends State<UsedProductsScreen> {
   final TextEditingController _searchController = TextEditingController();
+  late final Stream<List<UsedProductModel>> _usedProductsStream;
   String _selectedCategory = 'All';
   String _selectedGrade = 'All';
   String _sortBy = 'Featured';
+
+  @override
+  void initState() {
+    super.initState();
+    try {
+      _usedProductsStream = FirestoreService().streamUsedProducts();
+    } catch (e) {
+      debugPrint('UsedProductsScreen stream error: $e');
+      _usedProductsStream = Stream.value(const <UsedProductModel>[]);
+    }
+  }
 
   @override
   void dispose() {
@@ -188,7 +200,7 @@ class _UsedProductsScreenState extends State<UsedProductsScreen> {
         ],
       ),
       body: StreamBuilder<List<UsedProductModel>>(
-        stream: FirestoreService().streamUsedProducts(),
+        stream: _usedProductsStream,
         builder: (context, snapshot) {
           final allItems = snapshot.data ?? const <UsedProductModel>[];
 

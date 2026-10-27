@@ -568,11 +568,22 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _heroController = PageController();
-    _productsSub = FirestoreService().streamProducts().listen(
-      (products) => _liveProducts.value = products,
-      onError: (Object e) => debugPrint('Home products stream error: $e'),
-    );
-    _usedProductsStream = FirestoreService().streamUsedProducts();
+    try {
+      _productsSub = FirestoreService().streamProducts().listen(
+        (products) {
+          if (mounted) _liveProducts.value = products;
+        },
+        onError: (Object e) => debugPrint('Home products stream error: $e'),
+      );
+    } catch (e) {
+      debugPrint('HomeScreen products listen error: $e');
+    }
+    try {
+      _usedProductsStream = FirestoreService().streamUsedProducts();
+    } catch (e) {
+      debugPrint('HomeScreen used products stream error: $e');
+      _usedProductsStream = Stream.value(const <UsedProductModel>[]);
+    }
     _scrollController.addListener(_onScroll);
 
     // Auto-advance hero carousel every 4.5 seconds

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -15,25 +16,74 @@ import 'services/localization_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase gracefully. On Android, Google Services often initializes
-  // the [DEFAULT] app at the native level from google-services.json; if options
-  // are re-passed or slight differences exist, FlutterFire can throw duplicate-app.
-  // We handle both native pre-initialization and cold start options cleanly.
+  // Custom ErrorWidget so release mode never shows a blank grey screen
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      color: SvcColors.canvas,
+      child: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.error_outline_rounded,
+                  size: 48,
+                  color: SvcColors.primary,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Screen Notice',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: SvcColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  details.exceptionAsString(),
+                  textAlign: TextAlign.center,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    color: SvcColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  };
+
+  // Initialize Firebase gracefully. On Android, the native google-services
+  // plugin pre-initializes [DEFAULT] from google-services.json. Calling
+  // initializeApp() with no options binds Flutter to that native instance.
+  // If that fails or isn't present, we fall back to DefaultFirebaseOptions.
   try {
-    if (Firebase.apps.isEmpty) {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        await Firebase.initializeApp();
+      } catch (_) {
+        if (Firebase.apps.isEmpty) {
+          await Firebase.initializeApp(
+            options: DefaultFirebaseOptions.currentPlatform,
+          );
+        }
+      }
+    } else {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
   } catch (e) {
-    debugPrint('Firebase initial initialization notice: $e');
-    if (Firebase.apps.isEmpty) {
-      try {
-        await Firebase.initializeApp();
-      } catch (fallbackError) {
-        debugPrint('Firebase native fallback notice: $fallbackError');
-      }
-    }
+    debugPrint('Firebase initialization notice: $e');
   }
 
   try {

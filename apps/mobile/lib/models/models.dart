@@ -248,7 +248,11 @@ class ProductModel {
   });
 
   factory ProductModel.fromFirestore(String id, Map<String, dynamic> data) {
-    final images = data['images'] as List<dynamic>? ?? [];
+    final rawImages = data['images'];
+    final List<String> images = rawImages is List
+        ? rawImages.map((e) => e.toString()).toList()
+        : (rawImages is String && rawImages.isNotEmpty ? [rawImages] : const <String>[]);
+    final fallbackImage = data['imageUrl']?.toString();
     return ProductModel(
       id: id,
       name: data['name'] ?? '',
@@ -259,7 +263,7 @@ class ProductModel {
       availabilityType: data['availabilityType'] ?? 'IN_STOCK',
       stockQuantity: _asInt(data['stockQuantity']),
       description: data['description'] ?? '',
-      imageUrl: images.isNotEmpty ? images[0].toString() : null,
+      imageUrl: images.isNotEmpty ? images[0] : (fallbackImage != null && fallbackImage.isNotEmpty ? fallbackImage : null),
       warrantyInfo: data['warrantyInfo'] ?? 'Manufacturer Warranty',
       returnPolicyInfo: data['returnPolicyInfo'] ?? 'Standard Return Terms',
       isFlashDeal: data['isFlashDeal'] == true,
@@ -318,15 +322,25 @@ class UsedProductModel {
   });
 
   factory UsedProductModel.fromFirestore(String id, Map<String, dynamic> data) {
-    final images = data['images'] as List<dynamic>? ?? [];
-    final defects = (data['knownDefects'] as List<dynamic>? ?? []).map((e) => e.toString()).toList();
-    final accs = (data['includedAccessories'] as List<dynamic>? ?? []).map((e) => e.toString()).toList();
+    final rawImages = data['images'];
+    final List<String> images = rawImages is List
+        ? rawImages.map((e) => e.toString()).toList()
+        : (rawImages is String && rawImages.isNotEmpty ? [rawImages] : const <String>[]);
+    final rawDefects = data['knownDefects'];
+    final List<String> defects = rawDefects is List
+        ? rawDefects.map((e) => e.toString()).toList()
+        : const <String>[];
+    final rawAccs = data['includedAccessories'];
+    final List<String> accs = rawAccs is List
+        ? rawAccs.map((e) => e.toString()).toList()
+        : const <String>[];
+    final fallbackImage = data['imageUrl']?.toString();
 
     return UsedProductModel(
       id: id,
       name: data['name'] ?? '',
       brand: data['brand'] ?? '',
-      model: data['model'],
+      model: data['model']?.toString(),
       categoryName: data['categoryName'] ?? 'Cameras',
       conditionGrade: data['conditionGrade'] ?? 'EXCELLENT',
       conditionDescription: data['conditionDescription'] ?? '',
@@ -335,7 +349,7 @@ class UsedProductModel {
       testNotes: data['testNotes'] ?? '',
       includedAccessories: accs,
       warrantyDetails: data['warrantyDetails'] ?? 'QuickySewa Limited Warranty',
-      imageUrl: images.isNotEmpty ? images[0].toString() : null,
+      imageUrl: images.isNotEmpty ? images[0] : (fallbackImage != null && fallbackImage.isNotEmpty ? fallbackImage : null),
     );
   }
 }
