@@ -8,6 +8,7 @@ import 'package:sharma_video_care_mobile/screens/register_screen.dart';
 import 'package:sharma_video_care_mobile/services/firestore_service.dart';
 import 'package:sharma_video_care_mobile/services/localization_service.dart';
 import 'package:sharma_video_care_mobile/state/app_state.dart';
+import 'package:sharma_video_care_mobile/widgets/auth/auth_widgets.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -168,6 +169,22 @@ void main() {
       await tester.tap(find.text('Send reset link'));
       await tester.pump();
       expect(find.text('Please enter your email address.'), findsOneWidget);
+    });
+  });
+
+  group('authErrorMessage normalization', () {
+    test('normalizes legacy and uppercase Firebase error codes', () {
+      expect(authErrorMessage('ERROR_WRONG_PASSWORD'), 'Email or password is incorrect.');
+      expect(authErrorMessage('INVALID_LOGIN_CREDENTIALS'), 'Email or password is incorrect.');
+      expect(authErrorMessage('ERROR_EMAIL_ALREADY_IN_USE'), 'An account with this email already exists. Please sign in.');
+      expect(authErrorMessage('EMAIL_EXISTS'), 'An account with this email already exists. Please sign in.');
+      expect(authErrorMessage('ERROR_NETWORK_REQUEST_FAILED'), 'No internet connection. Please check and try again.');
+      expect(authErrorMessage('ERROR_OPERATION_NOT_ALLOWED'), 'Sign-up is temporarily unavailable. Please contact support.');
+    });
+
+    test('falls back to custom message when code is unmapped', () {
+      expect(authErrorMessage('unknown_code', customMessage: 'Custom reason here'), 'Custom reason here');
+      expect(authErrorMessage('unknown_code'), 'Something went wrong. Please try again.');
     });
   });
 }

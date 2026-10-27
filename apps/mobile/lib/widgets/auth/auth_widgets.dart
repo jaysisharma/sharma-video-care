@@ -13,7 +13,8 @@ import '../brand_logo.dart';
 String tr(String key, [Map<String, String>? vars]) => SvcLocalization.t(key, vars);
 
 /// Maps FirebaseAuth error codes to a localized, user-facing message.
-String authErrorMessage(String code) {
+String authErrorMessage(String rawCode, {String? customMessage}) {
+  final code = rawCode.toLowerCase().replaceAll('_', '-').replaceAll('error-', '');
   switch (code) {
     case 'user-not-found':
     case 'wrong-password':
@@ -30,6 +31,7 @@ String authErrorMessage(String code) {
       return tr('auth.err.network');
     case 'email-already-in-use':
     case 'credential-already-in-use':
+    case 'email-exists':
       return tr('auth.err.emailInUse');
     case 'account-exists-with-different-credential':
       return tr('auth.err.accountExistsDifferentCredential');
@@ -38,8 +40,18 @@ String authErrorMessage(String code) {
       return tr('auth.err.weakPassword');
     case 'operation-not-allowed':
       return tr('auth.err.unavailable');
+    case 'app-not-authorized':
+      return 'This app is not authorized to use Firebase Authentication.';
+    case 'api-key-not-valid':
+    case 'invalid-api-key':
+      return 'Firebase API key is invalid or restricted.';
+    case 'play-services-not-available':
+      return 'Google Play Services is not available on this device.';
     default:
-      debugPrint('Unmapped auth error: $code');
+      debugPrint('Unmapped auth error: $rawCode (normalized: $code)');
+      if (customMessage != null && customMessage.trim().isNotEmpty) {
+        return customMessage.trim();
+      }
       return tr('auth.err.generic');
   }
 }

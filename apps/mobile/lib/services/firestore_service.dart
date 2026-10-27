@@ -92,23 +92,41 @@ class FirestoreService {
       createdAt: now,
     );
 
-    await _db.collection('users').doc(user.uid).set({
-      'name': profile.name,
-      'email': profile.email,
-      'phone': profile.phone,
-      'role': 'customer',
-      'status': 'ACTIVE',
-      'createdAt': now.toIso8601String(),
-      'updatedAt': now.toIso8601String(),
-    });
+    try {
+      final docRef = _db.collection('users').doc(user.uid);
+      final docSnap = await docRef.get();
+      if (!docSnap.exists) {
+        await docRef.set({
+          'name': profile.name,
+          'email': profile.email,
+          'phone': profile.phone,
+          'role': 'customer',
+          'status': 'ACTIVE',
+          'createdAt': now.toIso8601String(),
+          'updatedAt': now.toIso8601String(),
+        });
+      } else {
+        await docRef.set({
+          'name': profile.name,
+          'phone': profile.phone,
+          'updatedAt': now.toIso8601String(),
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint('User profile document notice: $e');
+    }
 
-    await _db.collection('customers').doc(user.uid).set({
-      'userId': user.uid,
-      'name': profile.name,
-      'email': profile.email,
-      'phone': profile.phone,
-      'createdAt': now.toIso8601String(),
-    }, SetOptions(merge: true));
+    try {
+      await _db.collection('customers').doc(user.uid).set({
+        'userId': user.uid,
+        'name': profile.name,
+        'email': profile.email,
+        'phone': profile.phone,
+        'createdAt': now.toIso8601String(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Customer profile document notice: $e');
+    }
 
     return profile;
   }
@@ -126,9 +144,17 @@ class FirestoreService {
     // A guest who used chat is signed in anonymously; upgrading that account keeps
     // their uid, so their support conversation carries over to the new account.
     final current = _auth.currentUser;
-    final UserCredential cred = (current != null && current.isAnonymous)
-        ? await current.linkWithCredential(credential)
-        : await _auth.createUserWithEmailAndPassword(email: cleanEmail, password: password);
+    UserCredential cred;
+    if (current != null && current.isAnonymous) {
+      try {
+        cred = await current.linkWithCredential(credential);
+      } catch (linkError) {
+        debugPrint('Anonymous account linking failed: $linkError, creating fresh user');
+        cred = await _auth.createUserWithEmailAndPassword(email: cleanEmail, password: password);
+      }
+    } else {
+      cred = await _auth.createUserWithEmailAndPassword(email: cleanEmail, password: password);
+    }
     final user = cred.user!;
 
     try {
@@ -139,12 +165,25 @@ class FirestoreService {
       await user.sendEmailVerification();
     } catch (_) {}
 
-    return createCustomerProfile(
-      user: user,
-      name: cleanName,
-      email: cleanEmail,
-      phone: normalizeNepalPhone(phone),
-    );
+    try {
+      return await createCustomerProfile(
+        user: user,
+        name: cleanName,
+        email: cleanEmail,
+        phone: normalizeNepalPhone(phone),
+      );
+    } catch (e) {
+      debugPrint('createCustomerProfile notice: $e');
+      return UserModel(
+        id: user.uid,
+        name: cleanName,
+        email: cleanEmail,
+        phone: normalizeNepalPhone(phone),
+        role: 'customer',
+        status: 'ACTIVE',
+        createdAt: DateTime.now(),
+      );
+    }
   }
 
   Future<void> updateUserProfile({

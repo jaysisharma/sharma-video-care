@@ -92,10 +92,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
       SvcSnackbar.success(context, tr('auth.registerSuccess', {'email': email}));
       _finish();
     } on FirebaseAuthException catch (e) {
-      if (mounted) SvcSnackbar.error(context, authErrorMessage(e.code));
+      if (mounted) SvcSnackbar.error(context, authErrorMessage(e.code, customMessage: e.message));
+    } on FirebaseException catch (e) {
+      final msg = (e.message != null && e.message!.isNotEmpty)
+          ? '${e.code}: ${e.message}'
+          : tr('auth.err.generic');
+      if (mounted) SvcSnackbar.error(context, msg);
     } catch (e) {
       debugPrint('Sign up failed: $e');
-      if (mounted) SvcSnackbar.error(context, tr('auth.err.generic'));
+      final errStr = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+      if (mounted) SvcSnackbar.error(context, errStr.isNotEmpty ? errStr : tr('auth.err.generic'));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
