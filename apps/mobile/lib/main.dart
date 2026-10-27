@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'firebase_options.dart';
 import 'theme_tokens.dart';
 import 'state/app_state.dart';
@@ -15,81 +17,57 @@ import 'services/localization_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Custom ErrorWidget so release mode never shows a blank grey screen
-  ErrorWidget.builder = (FlutterErrorDetails details) {
-    return Material(
-      color: SvcColors.canvas,
-      child: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.error_outline_rounded,
-                  size: 48,
-                  color: SvcColors.primary,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Screen Notice',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: SvcColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  details.exceptionAsString(),
-                  textAlign: TextAlign.center,
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 12,
-                    color: SvcColors.muted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  };
-
-  // Initialize Firebase gracefully.
-  // We first initialize with DefaultFirebaseOptions. If the native platform
-  // (Android/iOS) already created the [DEFAULT] instance, we bind to it
-  // via Firebase.app() on duplicate-app. Otherwise we fallback cleanly.
-  try {
-    if (Firebase.apps.isEmpty) {
-      try {
-        await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform,
-        );
-      } on FirebaseException catch (e) {
-        if (e.code == 'duplicate-app') {
-          Firebase.app();
-        } else {
-          rethrow;
-        }
-      }
-    }
-  } catch (e) {
-    try {
-      Firebase.app();
-    } catch (_) {
-      try {
-        await Firebase.initializeApp();
-      } catch (fallbackError) {
-        debugPrint('Firebase initialization notice: $e | Fallback: $fallbackError');
-      }
-    }
+  // Release builds otherwise draw a failed widget as a plain grey box. Debug keeps
+  // Flutter's red error screen; the details go to Crashlytics either way.
+  if (kReleaseMode) {
+    ErrorWidget.builder = (_) => const _BrokenWidgetPlaceholder();
   }
+
+  if (await _initFirebase()) {
+    await _startApp();
+  } else {
+    // Auth, products, orders and chat all depend on Firebase; without it every
+    // screen would fail, so offer a retry instead.
+    runApp(const _StartupErrorApp());
+  }
+}
+
+/// Startup errors caught before Crashlytics is ready; reported once it is.
+final List<(Object, StackTrace)> _startupErrors = [];
+
+/// Firebase setup is local (no network), so a failure here is a config or plugin
+/// problem. Tries the generated options first, then the native config from
+/// google-services.json. Safe to call again after a failed attempt.
+Future<bool> _initFirebase() async {
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    return true;
+  } on FirebaseException catch (e, stack) {
+    if (e.code == 'duplicate-app') return true;
+    _startupErrors.add((e, stack));
+  } catch (e, stack) {
+    _startupErrors.add((e, stack));
+  }
+  debugPrint('Firebase init with generated options failed: ${_startupErrors.last.$1}');
+
+  try {
+    await Firebase.initializeApp();
+    return true;
+  } catch (e, stack) {
+    debugPrint('Firebase init with native config failed: $e\n$stack');
+    return false;
+  }
+}
+
+/// Runs once Firebase is up: error reporting, saved language and session, then the app.
+Future<void> _startApp() async {
+  _setUpCrashReporting();
+  for (final (error, stack) in _startupErrors) {
+    // Init recovered via the fallback, which points at a firebase_options.dart /
+    // google-services.json mismatch worth fixing.
+    FirebaseCrashlytics.instance.recordError(error, stack, reason: 'Firebase init (recovered)');
+  }
+  _startupErrors.clear();
 
   try {
     await SvcLocalization.init();
@@ -107,6 +85,134 @@ void main() async {
   runApp(SharmaVideoCareApp(appState: appState));
 }
 
+/// Sends Flutter build/layout errors and uncaught async errors to Crashlytics, so
+/// release-build failures show up in the Firebase console with stack traces.
+void _setUpCrashReporting() {
+  final crashlytics = FirebaseCrashlytics.instance;
+  crashlytics.setCrashlyticsCollectionEnabled(!kDebugMode);
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    crashlytics.recordFlutterError(details);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('Uncaught error: $error\n$stack');
+    crashlytics.recordError(error, stack, fatal: true);
+    return true;
+  };
+}
+
+/// Shown in place of a widget that failed to build (release only). Scales down to
+/// fit anything from a product card to a full page, and never shows error text.
+class _BrokenWidgetPlaceholder extends StatelessWidget {
+  const _BrokenWidgetPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: ColoredBox(
+        color: SvcColors.canvas,
+        child: Center(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline_rounded, size: 28, color: SvcColors.muted),
+                  const SizedBox(height: 6),
+                  Text(
+                    SvcLocalization.isNepali ? 'यो भाग देखाउन सकिएन' : "Couldn't show this section",
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: SvcColors.muted,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StartupErrorApp extends StatefulWidget {
+  const _StartupErrorApp();
+
+  @override
+  State<_StartupErrorApp> createState() => _StartupErrorAppState();
+}
+
+class _StartupErrorAppState extends State<_StartupErrorApp> {
+  bool _retrying = false;
+
+  Future<void> _retry() async {
+    if (_retrying) return;
+    setState(() => _retrying = true);
+    if (await _initFirebase()) {
+      await _startApp(); // replaces this screen with the app
+    } else if (mounted) {
+      setState(() => _retrying = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: SvcTheme.light(),
+      home: Scaffold(
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline_rounded, size: 48, color: SvcColors.muted),
+                const SizedBox(height: 16),
+                const Text(
+                  "Couldn't start QuickySewa",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: SvcColors.ink),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Something went wrong while starting the app. Please try again.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: SvcColors.muted),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: _retrying ? null : _retry,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SvcColors.primary,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: SvcColors.primary,
+                    disabledForegroundColor: Colors.white,
+                    minimumSize: const Size(160, 48),
+                  ),
+                  child: _retrying
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Try again'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class SharmaVideoCareApp extends StatefulWidget {
   final AppState appState;
 
@@ -117,23 +223,17 @@ class SharmaVideoCareApp extends StatefulWidget {
 }
 
 class _SharmaVideoCareAppState extends State<SharmaVideoCareApp> {
+  // Built once. Screens listen to AppState and the language setting themselves, so
+  // the app root never needs to rebuild.
+  final ThemeData _theme = SvcTheme.light();
+
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<String>(
-      valueListenable: SvcLocalization.languageNotifier,
-      builder: (context, currentLang, _) {
-        return ListenableBuilder(
-          listenable: widget.appState,
-          builder: (context, _) {
-            return MaterialApp(
-              title: 'QuickySewa',
-              debugShowCheckedModeBanner: false,
-              theme: SvcTheme.light(),
-              home: SplashScreen(appState: widget.appState),
-            );
-          },
-        );
-      },
+    return MaterialApp(
+      title: 'QuickySewa',
+      debugShowCheckedModeBanner: false,
+      theme: _theme,
+      home: SplashScreen(appState: widget.appState),
     );
   }
 }
@@ -155,6 +255,14 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   late int _currentIndex;
 
+  // Tabs are built the first time they're opened and then kept alive, so switching
+  // back doesn't resubscribe to Firestore or lose the scroll position.
+  final Set<int> _openedTabs = {};
+
+  // Kept-alive tabs only rebuild through this screen, so it listens to language too.
+  late final Listenable _rebuildTriggers =
+      Listenable.merge([widget.appState, SvcLocalization.languageNotifier]);
+
   @override
   void initState() {
     super.initState();
@@ -162,13 +270,40 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _onNavigateTab(int index) {
+    // A hidden tab keeps its state, so drop focus or the keyboard stays up.
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _currentIndex = index);
+  }
+
+  Widget _buildCartBadge(int count) {
+    return Positioned(
+      right: -6,
+      top: -4,
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+        decoration: BoxDecoration(
+          color: SvcColors.primary,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          count > 9 ? '9+' : '$count',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+            height: 1,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.appState,
+      listenable: _rebuildTriggers,
       builder: (context, _) {
         final user = widget.appState.currentUser;
         final isTechnician = user?.role == 'technician';
@@ -198,28 +333,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ),
           NavigationDestination(
             icon: Stack(
+              clipBehavior: Clip.none,
               children: [
                 const Icon(Icons.shopping_bag_outlined),
                 if (widget.appState.cartCount > 0)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: SvcColors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        '${widget.appState.cartCount}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
+                  _buildCartBadge(widget.appState.cartCount),
               ],
             ),
             selectedIcon: const Icon(Icons.shopping_bag, color: SvcColors.primary),
@@ -245,12 +363,24 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         ];
 
         final safeIndex = _currentIndex < screens.length ? _currentIndex : 0;
+        _openedTabs.add(safeIndex);
 
         return Scaffold(
-          body: screens[safeIndex],
+          body: IndexedStack(
+            index: safeIndex,
+            children: [
+              for (var i = 0; i < screens.length; i++)
+                // TickerMode off pauses hidden tabs' animations; Home also checks
+                // it to skip its carousel and countdown timers.
+                TickerMode(
+                  enabled: i == safeIndex,
+                  child: _openedTabs.contains(i) ? screens[i] : const SizedBox.shrink(),
+                ),
+            ],
+          ),
           bottomNavigationBar: NavigationBar(
             selectedIndex: safeIndex,
-            onDestinationSelected: (index) => setState(() => _currentIndex = index),
+            onDestinationSelected: _onNavigateTab,
             destinations: destinations,
             backgroundColor: SvcColors.surface,
             indicatorColor: SvcColors.primarySoft,

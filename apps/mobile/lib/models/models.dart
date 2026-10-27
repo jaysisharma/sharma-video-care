@@ -8,11 +8,20 @@ int _asInt(dynamic value) {
   return 0;
 }
 
+/// Text fields may hold a number or be missing (data entered on the website or
+/// in the console); anything non-null is shown as text instead of throwing.
+String _str(dynamic value, [String fallback = '']) => value == null ? fallback : value.toString();
+String? _strOrNull(dynamic value) => value?.toString();
+
+Map<String, dynamic> _asMap(dynamic value) =>
+    value is Map ? Map<String, dynamic>.from(value) : const <String, dynamic>{};
+
 /// Firestore dates may be a Timestamp or an ISO-8601 string (the web admin
-/// writes strings); anything else is treated as missing.
+/// writes strings); anything else is treated as missing. Always local time, so
+/// UTC strings ("...Z") display in the device's timezone.
 DateTime? _asDate(dynamic value) {
   if (value is Timestamp) return value.toDate();
-  if (value is String) return DateTime.tryParse(value);
+  if (value is String) return DateTime.tryParse(value)?.toLocal();
   return null;
 }
 
@@ -41,13 +50,13 @@ class UserModel {
   factory UserModel.fromFirestore(String id, Map<String, dynamic> data) {
     return UserModel(
       id: id,
-      name: data['name'] ?? '',
-      email: data['email'] ?? '',
-      phone: data['phone'] ?? '',
-      role: data['role'] ?? 'customer',
-      technicianType: data['technicianType'],
-      status: data['status'] ?? 'ACTIVE',
-      createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
+      name: _str(data['name']),
+      email: _str(data['email']),
+      phone: _str(data['phone']),
+      role: _str(data['role'], 'customer'),
+      technicianType: _strOrNull(data['technicianType']),
+      status: _str(data['status'], 'ACTIVE'),
+      createdAt: _asDate(data['createdAt']) ?? DateTime.now(),
     );
   }
 
@@ -60,7 +69,7 @@ class UserModel {
       'role': role,
       if (technicianType != null) 'technicianType': technicianType,
       'status': status,
-      'createdAt': createdAt.toIso8601String(),
+      'createdAt': createdAt.toUtc().toIso8601String(),
     };
   }
 
@@ -106,9 +115,9 @@ class ServiceCategoryModel {
   factory ServiceCategoryModel.fromFirestore(String id, Map<String, dynamic> data) {
     return ServiceCategoryModel(
       id: id,
-      name: data['name'] ?? '',
-      slug: data['slug'] ?? '',
-      description: data['description'] ?? '',
+      name: _str(data['name']),
+      slug: _str(data['slug']),
+      description: _str(data['description']),
       displayOrder: _asInt(data['displayOrder']),
     );
   }
@@ -153,26 +162,26 @@ class ServiceRequestModel {
   });
 
   factory ServiceRequestModel.fromFirestore(String id, Map<String, dynamic> data) {
-    final addr = data['address'] as Map<String, dynamic>? ?? {};
-    final sched = data['preferredSchedule'] as Map<String, dynamic>? ?? {};
+    final addr = _asMap(data['address']);
+    final sched = _asMap(data['preferredSchedule']);
 
     return ServiceRequestModel(
       id: id,
-      customerId: data['customerId'] ?? '',
-      customerName: data['customerName'] ?? '',
-      customerPhone: data['customerPhone'] ?? '',
-      title: data['title'] ?? '',
-      description: data['description'] ?? '',
-      status: data['status'] ?? 'REQUESTED',
-      city: addr['city'] ?? 'Janakpur',
-      streetAddress: addr['streetAddress'] ?? '',
-      preferredDate: sched['preferredDate'] ?? '',
-      preferredTimeSlot: sched['preferredTimeSlot'] ?? 'Morning',
-      assignedTechnicianId: data['assignedTechnicianId'],
-      assignedTechnicianName: data['assignedTechnicianName'],
-      quoteId: data['quoteId'],
-      inspectionId: data['inspectionId'],
-      createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
+      customerId: _str(data['customerId']),
+      customerName: _str(data['customerName']),
+      customerPhone: _str(data['customerPhone']),
+      title: _str(data['title']),
+      description: _str(data['description']),
+      status: _str(data['status'], 'REQUESTED'),
+      city: _str(addr['city'], 'Janakpur'),
+      streetAddress: _str(addr['streetAddress']),
+      preferredDate: _str(sched['preferredDate']),
+      preferredTimeSlot: _str(sched['preferredTimeSlot'], 'Morning'),
+      assignedTechnicianId: _strOrNull(data['assignedTechnicianId']),
+      assignedTechnicianName: _strOrNull(data['assignedTechnicianName']),
+      quoteId: _strOrNull(data['quoteId']),
+      inspectionId: _strOrNull(data['inspectionId']),
+      createdAt: _asDate(data['createdAt']) ?? DateTime.now(),
     );
   }
 }
@@ -202,13 +211,13 @@ class ServiceQuoteModel {
   factory ServiceQuoteModel.fromFirestore(String id, Map<String, dynamic> data) {
     return ServiceQuoteModel(
       id: id,
-      serviceRequestId: data['serviceRequestId'] ?? '',
+      serviceRequestId: _str(data['serviceRequestId']),
       labourTotal: _asInt(data['labourTotal']),
       partsTotal: _asInt(data['partsTotal']),
       total: _asInt(data['total']),
-      status: data['status'] ?? 'SENT',
-      warrantyTerms: data['warrantyTerms'] ?? 'Service Warranty applies',
-      notes: data['notes'] ?? '',
+      status: _str(data['status'], 'SENT'),
+      warrantyTerms: _str(data['warrantyTerms'], 'Service Warranty applies'),
+      notes: _str(data['notes']),
     );
   }
 }
@@ -255,17 +264,17 @@ class ProductModel {
     final fallbackImage = data['imageUrl']?.toString();
     return ProductModel(
       id: id,
-      name: data['name'] ?? '',
-      brand: data['brand'] ?? '',
-      categoryName: data['categoryName'] ?? '',
+      name: _str(data['name']),
+      brand: _str(data['brand']),
+      categoryName: _str(data['categoryName']),
       price: _asInt(data['price']),
       originalPrice: data['originalPrice'] == null ? null : _asInt(data['originalPrice']),
-      availabilityType: data['availabilityType'] ?? 'IN_STOCK',
+      availabilityType: _str(data['availabilityType'], 'IN_STOCK'),
       stockQuantity: _asInt(data['stockQuantity']),
-      description: data['description'] ?? '',
+      description: _str(data['description']),
       imageUrl: images.isNotEmpty ? images[0] : (fallbackImage != null && fallbackImage.isNotEmpty ? fallbackImage : null),
-      warrantyInfo: data['warrantyInfo'] ?? 'Manufacturer Warranty',
-      returnPolicyInfo: data['returnPolicyInfo'] ?? 'Standard Return Terms',
+      warrantyInfo: _str(data['warrantyInfo'], 'Manufacturer Warranty'),
+      returnPolicyInfo: _str(data['returnPolicyInfo'], 'Standard Return Terms'),
       isFlashDeal: data['isFlashDeal'] == true,
       flashDealEndsAt: _asDate(data['flashDealEndsAt']),
     );
@@ -338,17 +347,17 @@ class UsedProductModel {
 
     return UsedProductModel(
       id: id,
-      name: data['name'] ?? '',
-      brand: data['brand'] ?? '',
+      name: _str(data['name']),
+      brand: _str(data['brand']),
       model: data['model']?.toString(),
-      categoryName: data['categoryName'] ?? 'Cameras',
-      conditionGrade: data['conditionGrade'] ?? 'EXCELLENT',
-      conditionDescription: data['conditionDescription'] ?? '',
+      categoryName: _str(data['categoryName'], 'Cameras'),
+      conditionGrade: _str(data['conditionGrade'], 'EXCELLENT'),
+      conditionDescription: _str(data['conditionDescription']),
       price: _asInt(data['price']),
       knownDefects: defects,
-      testNotes: data['testNotes'] ?? '',
+      testNotes: _str(data['testNotes']),
       includedAccessories: accs,
-      warrantyDetails: data['warrantyDetails'] ?? 'QuickySewa Limited Warranty',
+      warrantyDetails: _str(data['warrantyDetails'], 'QuickySewa Limited Warranty'),
       imageUrl: images.isNotEmpty ? images[0] : (fallbackImage != null && fallbackImage.isNotEmpty ? fallbackImage : null),
     );
   }
@@ -373,6 +382,24 @@ class CartItemModel {
   });
 
   int get totalPrice => unitPrice * quantity;
+
+  Map<String, dynamic> toMap() => {
+        'productId': productId,
+        'productType': productType,
+        'name': name,
+        'unitPrice': unitPrice,
+        'quantity': quantity,
+        if (imageUrl != null) 'imageUrl': imageUrl,
+      };
+
+  factory CartItemModel.fromMap(Map<String, dynamic> map) => CartItemModel(
+        productId: _str(map['productId']),
+        productType: _str(map['productType'], 'NEW'),
+        name: _str(map['name']),
+        unitPrice: _asInt(map['unitPrice']),
+        quantity: _asInt(map['quantity']).clamp(1, 99),
+        imageUrl: _strOrNull(map['imageUrl']),
+      );
 }
 
 class OrderModel {
@@ -405,8 +432,8 @@ class OrderModel {
   });
 
   factory OrderModel.fromFirestore(String id, Map<String, dynamic> data) {
-    final addr = data['shippingAddress'] as Map<String, dynamic>? ?? {};
-    final courier = data['courierDetails'] as Map<String, dynamic>? ?? {};
+    final addr = _asMap(data['shippingAddress']);
+    final courier = _asMap(data['courierDetails']);
     final rawItems = data['items'] as List<dynamic>? ?? [];
     final itemsSummary = rawItems.map((i) {
       if (i is Map) {
@@ -417,17 +444,17 @@ class OrderModel {
 
     return OrderModel(
       id: id,
-      customerId: data['customerId'] ?? '',
+      customerId: _str(data['customerId']),
       total: _asInt(data['total']),
-      paymentMethod: data['paymentMethod'] ?? 'COD',
-      paymentStatus: data['paymentStatus'] ?? 'PENDING',
-      orderStatus: data['orderStatus'] ?? 'CONFIRMED',
-      city: data['city'] ?? addr['city'] ?? 'Janakpur',
-      streetAddress: data['streetAddress'] ?? addr['streetAddress'] ?? '',
+      paymentMethod: _str(data['paymentMethod'], 'COD'),
+      paymentStatus: _str(data['paymentStatus'], 'PENDING'),
+      orderStatus: _str(data['orderStatus'], 'PENDING_PAYMENT'), // never claim confirmed
+      city: _str(data['city'] ?? addr['city'], 'Janakpur'),
+      streetAddress: _str(data['streetAddress'] ?? addr['streetAddress'], ''),
       itemsSummary: itemsSummary,
-      courierPartner: courier['partnerName'],
-      trackingNumber: courier['trackingNumber'],
-      createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
+      courierPartner: _strOrNull(courier['partnerName']),
+      trackingNumber: _strOrNull(courier['trackingNumber']),
+      createdAt: _asDate(data['createdAt']) ?? DateTime.now(),
     );
   }
 }
@@ -456,12 +483,12 @@ class ChatMessageModel {
     final att = (data['attachmentUrls'] as List<dynamic>? ?? []).map((e) => e.toString()).toList();
     return ChatMessageModel(
       id: id,
-      senderId: data['senderId'] ?? '',
-      senderName: data['senderName'] ?? '',
-      senderRole: data['senderRole'] ?? 'customer',
-      text: data['text'] ?? '',
+      senderId: _str(data['senderId']),
+      senderName: _str(data['senderName']),
+      senderRole: _str(data['senderRole'], 'customer'),
+      text: _str(data['text']),
       attachmentUrls: att,
-      createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
+      createdAt: _asDate(data['createdAt']) ?? DateTime.now(),
     );
   }
 }
@@ -493,16 +520,14 @@ class SourceRequestModel {
   factory SourceRequestModel.fromFirestore(String id, Map<String, dynamic> data) {
     return SourceRequestModel(
       id: id,
-      customerId: data['customerId'] ?? '',
-      itemDescription: data['itemDescription'] ?? data['title'] ?? '',
-      budget: data['budget'] ?? '',
-      city: data['city'] ?? 'Janakpur',
-      status: data['status'] ?? 'SUBMITTED',
-      notes: data['notes'] ?? '',
-      advanceDeposit: (data['advanceDeposit'] ?? 0) is int
-          ? data['advanceDeposit']
-          : int.tryParse(data['advanceDeposit'].toString()) ?? 0,
-      createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
+      customerId: _str(data['customerId']),
+      itemDescription: _str(data['itemDescription'] ?? data['title']),
+      budget: _str(data['budget']), // the website stores a number
+      city: _str(data['city'], 'Janakpur'),
+      status: _str(data['status'], 'SUBMITTED'),
+      notes: _str(data['notes']),
+      advanceDeposit: _asInt(data['advanceDeposit']), // missing on web-created requests
+      createdAt: _asDate(data['createdAt']) ?? DateTime.now(),
     );
   }
 }
@@ -600,14 +625,13 @@ class NotificationItemModel {
     this.userId,
   });
 
-  factory NotificationItemModel.fromFirestore(String id, Map<String, dynamic> data) {
-    DateTime parsedDate;
-    final created = data['createdAt'] ?? data['timestamp'];
-    if (created is String) {
-      parsedDate = DateTime.tryParse(created) ?? DateTime.now();
-    } else {
-      parsedDate = DateTime.now();
-    }
+  /// Read state is per viewer: [viewerId] is in `readBy`, or (for a notification
+  /// addressed to the viewer alone) the legacy `isRead`/`read` flag is set.
+  /// Guests (no [viewerId]) keep their read state on the device only.
+  factory NotificationItemModel.fromFirestore(String id, Map<String, dynamic> data, {String? viewerId}) {
+    final parsedDate = _asDate(data['createdAt'] ?? data['timestamp']) ?? DateTime.now();
+    final readBy = data['readBy'];
+    final isPersonal = viewerId != null && data['userId'] == viewerId;
 
     return NotificationItemModel(
       id: id,
@@ -615,7 +639,8 @@ class NotificationItemModel {
       message: data['message']?.toString() ?? '',
       category: data['category']?.toString() ?? 'system',
       timestamp: parsedDate,
-      isRead: data['isRead'] == true || data['read'] == true,
+      isRead: (viewerId != null && readBy is List && readBy.contains(viewerId)) ||
+          (isPersonal && (data['isRead'] == true || data['read'] == true)),
       actionRoute: data['actionRoute']?.toString(),
       actionLabel: data['actionLabel']?.toString(),
       targetGroup: data['targetGroup']?.toString() ?? 'all',
@@ -635,7 +660,7 @@ class NotificationItemModel {
       'imageUrl': imageUrl,
       'userId': userId,
       'isRead': isRead,
-      'createdAt': timestamp.toIso8601String(),
+      'createdAt': timestamp.toUtc().toIso8601String(),
     };
   }
 
@@ -697,12 +722,12 @@ class UserAddress {
 
   factory UserAddress.fromMap(Map<String, dynamic> map) {
     return UserAddress(
-      id: map['id'] ?? '',
-      label: map['label'] ?? 'Delivery Address',
-      fullAddress: map['fullAddress'] ?? '',
-      city: map['city'] ?? '',
-      phone: map['phone'] ?? '',
-      isDefault: map['isDefault'] ?? false,
+      id: _str(map['id']),
+      label: _str(map['label'], 'Delivery Address'),
+      fullAddress: _str(map['fullAddress']),
+      city: _str(map['city']),
+      phone: _str(map['phone']),
+      isDefault: map['isDefault'] == true,
     );
   }
 
@@ -749,17 +774,17 @@ class RegisteredGear {
     'model': model,
     'serialNumber': serialNumber,
     'warrantyStatus': warrantyStatus,
-    'registeredAt': registeredAt.toIso8601String(),
+    'registeredAt': registeredAt.toUtc().toIso8601String(),
   };
 
   factory RegisteredGear.fromMap(Map<String, dynamic> map) {
     return RegisteredGear(
-      id: map['id'] ?? '',
-      brand: map['brand'] ?? '',
-      model: map['model'] ?? '',
-      serialNumber: map['serialNumber'] ?? '',
-      warrantyStatus: map['warrantyStatus'] ?? 'Active Lab Warranty',
-      registeredAt: DateTime.tryParse(map['registeredAt'] ?? '') ?? DateTime.now(),
+      id: _str(map['id']),
+      brand: _str(map['brand']),
+      model: _str(map['model']),
+      serialNumber: _str(map['serialNumber']),
+      warrantyStatus: _str(map['warrantyStatus'], 'Active Lab Warranty'),
+      registeredAt: _asDate(map['registeredAt']) ?? DateTime.now(),
     );
   }
 

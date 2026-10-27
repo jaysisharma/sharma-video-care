@@ -228,8 +228,12 @@ class SvcLocalization {
       final saved = prefs.getString(_kLanguageKey);
       if (saved == 'en' || saved == 'ne') {
         currentLanguage = saved!;
-        languageNotifier.value = currentLanguage;
+      } else {
+        // First launch: follow the phone's language until the user picks one.
+        final device = WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+        currentLanguage = device == 'ne' ? 'ne' : 'en';
       }
+      languageNotifier.value = currentLanguage;
     } catch (e) {
       debugPrint('Error initializing language: $e');
     }

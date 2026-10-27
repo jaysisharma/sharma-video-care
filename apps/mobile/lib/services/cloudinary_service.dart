@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -21,17 +23,39 @@ class CloudinaryService {
   static const String uploadEndpoint =
       'https://api.cloudinary.com/v1_1/$cloudName/image/upload';
 
+  // A stalled connection fails instead of leaving the upload spinner up forever.
+  static const Duration _signTimeout = Duration(seconds: 20);
+  static const Duration _uploadTimeout = Duration(seconds: 90);
+
   final ImagePicker _picker = ImagePicker();
+
+  static void _report(Object error, StackTrace stack, String reason) {
+    debugPrint('$reason: $error');
+    if (Firebase.apps.isEmpty) return;
+    FirebaseCrashlytics.instance.recordError(error, stack, reason: reason);
+  }
+
+  /// Sends a signed upload and returns the HTTPS URL, or null on a non-2xx reply.
+  Future<String?> _send(http.MultipartRequest request) async {
+    final streamed = await request.send().timeout(_uploadTimeout);
+    final response = await http.Response.fromStream(streamed).timeout(_uploadTimeout);
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final Map<String, dynamic> data = jsonDecode(response.body);
+      return data['secure_url'] as String? ?? data['url'] as String?;
+    }
+    _report(HttpException('HTTP ${response.statusCode}: ${response.body}'), StackTrace.current, 'Cloudinary upload');
+    return null;
+  }
 
   /// Asks the server to sign an upload into [folder]. Guests are signed in
   /// anonymously first because the function only signs for signed-in users.
   Future<({String folder, int timestamp, String signature})> _requestSignature(String folder) async {
     final auth = FirebaseAuth.instance;
     if (auth.currentUser == null) {
-      await auth.signInAnonymously();
+      await auth.signInAnonymously().timeout(_signTimeout);
     }
     final result = await FirebaseFunctions.instance
-        .httpsCallable('signCloudinaryUpload')
+        .httpsCallable('signCloudinaryUpload', options: HttpsCallableOptions(timeout: _signTimeout))
         .call<Map<String, dynamic>>({'folder': folder});
     final data = Map<String, dynamic>.from(result.data);
     return (
@@ -66,18 +90,9 @@ class CloudinaryService {
         ),
       );
 
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
-        return data['secure_url'] as String? ?? data['url'] as String?;
-      } else {
-        debugPrint('Cloudinary upload error (${response.statusCode}): ${response.body}');
-        return null;
-      }
-    } catch (e) {
-      debugPrint('CloudinaryService uploadImageBytes exception: $e');
+      return await _send(request);
+    } catch (e, stack) {
+      _report(e, stack, 'Cloudinary uploadImageBytes');
       return null;
     }
   }
@@ -105,8 +120,8 @@ class CloudinaryService {
       final bytes = await xFile.readAsBytes();
       final filename = xFile.name.isNotEmpty ? xFile.name : 'upload_${DateTime.now().millisecondsSinceEpoch}.jpg';
       return await uploadImageBytes(bytes, filename: filename, folder: folder);
-    } catch (e) {
-      debugPrint('CloudinaryService uploadXFile exception: $e');
+    } catch (e, stack) {
+      _report(e, stack, 'Cloudinary uploadXFile');
       return null;
     }
   }
@@ -118,19 +133,9 @@ class CloudinaryService {
   }) async {
     try {
       final request = _signedRequest(await _requestSignature(folder))..fields['file'] = base64Data;
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
-        return data['secure_url'] as String? ?? data['url'] as String?;
-      } else {
-        debugPrint('Cloudinary upload error (${response.statusCode}): ${response.body}');
-        return null;
-      }
-    } catch (e) {
-      debugPrint('CloudinaryService uploadBase64 exception: $e');
+      return await _send(request);
+    } catch (e, stack) {
+      _report(e, stack, 'Cloudinary uploadBase64');
       return null;
     }
   }
@@ -154,8 +159,8 @@ class CloudinaryService {
 
       if (pickedFile == null) return null;
       return await uploadXFile(pickedFile, folder: folder);
-    } catch (e) {
-      debugPrint('CloudinaryService pickAndUploadImage error: $e');
+    } catch (e, stack) {
+      _report(e, stack, 'Cloudinary pickAndUploadImage');
       return null;
     }
   }

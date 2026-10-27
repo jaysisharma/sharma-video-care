@@ -73,7 +73,7 @@ void main() {
         'isFlashDeal': true,
         'flashDealEndsAt': '2026-10-29T12:00:00.000Z', // web admin writes ISO strings
       });
-      expect(live.flashDealEndsAt, DateTime.utc(2026, 10, 29, 12));
+      expect(live.flashDealEndsAt!.isAtSameMomentAs(DateTime.utc(2026, 10, 29, 12)), isTrue);
       expect(live.isLiveFlashDeal(now), isTrue);
       expect(live.isLiveFlashDeal(DateTime.utc(2026, 10, 29, 12, 0, 1)), isFalse);
 
@@ -155,7 +155,7 @@ void main() {
       expect(order.itemsSummary, equals(''));
       expect(order.courierPartner, isNull);
       expect(order.trackingNumber, isNull);
-      expect(order.orderStatus, equals('CONFIRMED'));
+      expect(order.orderStatus, equals('PENDING_PAYMENT')); // missing status is never shown as confirmed
     });
   });
 
@@ -285,6 +285,57 @@ void main() {
 
       item.quantity = 4;
       expect(item.totalPrice, equals(232000));
+    });
+  });
+
+  group('NotificationItemModel read state', () {
+    test('a broadcast is read only for viewers listed in readBy', () {
+      final data = {'title': 'Sale', 'targetGroup': 'all', 'isRead': true, 'readBy': ['u1']};
+      expect(NotificationItemModel.fromFirestore('n1', data, viewerId: 'u1').isRead, isTrue);
+      expect(NotificationItemModel.fromFirestore('n1', data, viewerId: 'u2').isRead, isFalse);
+      expect(NotificationItemModel.fromFirestore('n1', data).isRead, isFalse); // guest
+    });
+
+    test('a personal notification still honours the legacy isRead flag', () {
+      final data = {'title': 'Order shipped', 'targetGroup': 'specific', 'userId': 'u1', 'isRead': true};
+      expect(NotificationItemModel.fromFirestore('n2', data, viewerId: 'u1').isRead, isTrue);
+    });
+  });
+
+  group('Dates', () {
+    test('UTC strings from the website are read as local time', () {
+      final order = OrderModel.fromFirestore('o1', {'createdAt': '2026-10-01T15:00:00Z', 'items': []});
+      expect(order.createdAt.isUtc, isFalse);
+      expect(order.createdAt.isAtSameMomentAs(DateTime.utc(2026, 10, 1, 15)), isTrue);
+    });
+
+    test('dates are written as UTC', () {
+      final n = NotificationItemModel(id: 'n', title: 't', message: 'm', category: 'system', timestamp: DateTime(2026, 10, 1, 20, 45));
+      expect(n.toMap()['createdAt'], endsWith('Z'));
+    });
+  });
+
+  group('Website-created and loosely typed data', () {
+    test('a source request from the website (numeric budget, no deposit) parses', () {
+      final r = SourceRequestModel.fromFirestore('s1', {'itemDescription': 'Sony FX3', 'budget': 450000, 'customerId': 'u1'});
+      expect(r.budget, '450000');
+      expect(r.advanceDeposit, 0);
+      expect(SourceRequestModel.fromFirestore('s2', {'advanceDeposit': 1500.0}).advanceDeposit, 1500);
+    });
+
+    test('non-text values in text fields are shown as text', () {
+      final u = UserModel.fromFirestore('u1', {'name': 'Ram', 'phone': 9801234567, 'role': 'technician'});
+      expect(u.phone, '9801234567');
+      expect(u.role, 'technician');
+    });
+  });
+
+  group('CartItemModel persistence', () {
+    test('round-trips through toMap/fromMap', () {
+      final item = CartItemModel(productId: 'p1', productType: 'USED', name: 'A7 III', unitPrice: 155000, quantity: 2, imageUrl: 'https://x/y.jpg');
+      final copy = CartItemModel.fromMap(item.toMap());
+      expect([copy.productId, copy.productType, copy.name, copy.unitPrice, copy.quantity, copy.imageUrl],
+          ['p1', 'USED', 'A7 III', 155000, 2, 'https://x/y.jpg']);
     });
   });
 }

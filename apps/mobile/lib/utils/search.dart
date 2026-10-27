@@ -56,11 +56,12 @@ int searchScore(String query, List<String?> fields) {
 String? _matchingVariant(String term, String haystack) {
   if (haystack.contains(term)) return term;
   if (term.length > 3) {
-    if (term.endsWith('es') && haystack.contains(term.substring(0, term.length - 2))) {
-      return term.substring(0, term.length - 2);
-    }
-    if (term.endsWith('s') && haystack.contains(term.substring(0, term.length - 1))) {
-      return term.substring(0, term.length - 1);
+    // A singular form only counts as a whole word, so "lens" -> "len" can't
+    // match "Lenovo".
+    for (final suffix in const ['es', 's']) {
+      if (!term.endsWith(suffix)) continue;
+      final stem = term.substring(0, term.length - suffix.length);
+      if (' $haystack '.contains(' $stem ')) return stem;
     }
   }
   return null;

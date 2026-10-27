@@ -59,7 +59,7 @@ void main() {
       expect(map['role'], 'technician');
       expect(map['technicianType'], 'INTERNAL');
       expect(map['status'], 'ACTIVE');
-      expect(map['createdAt'], now.toIso8601String());
+      expect(map['createdAt'], now.toUtc().toIso8601String());
     });
 
     test('UserModel.copyWith updates specified fields only', () {

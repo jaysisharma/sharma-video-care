@@ -2,7 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import '../models/models.dart';
 import '../services/firestore_service.dart';
 
@@ -14,6 +17,12 @@ class AppState extends ChangeNotifier {
   static const String _kUserRole = 'svc_user_role';
   static const String _kUserTechType = 'svc_user_tech_type';
   static const String _kSelectedDeliveryHub = 'svc_selected_delivery_hub';
+  // Cart contents (product ids, names, prices; no personal data). Cleared on sign-out.
+  static const String _kCart = 'svc_cart';
+  // Notification ids the viewer removed, per audience ('guest' or a uid), and a
+  // guest's read ids (signed-in read state lives in Firestore `readBy`).
+  static const String _kHiddenNotificationsPrefix = 'svc_notif_hidden_';
+  static const String _kGuestReadNotifications = 'svc_notif_read_guest';
 
   UserModel? _currentUser;
   bool _isAuthenticated = false;
@@ -22,13 +31,25 @@ class AppState extends ChangeNotifier {
   // listener must not race them with a fallback profile write.
   bool _authInFlight = false;
   Future<void>? _sessionReconcile;
+  // Profile syncs in progress by uid, so the auth listener's first event and
+  // loadSession's background sync share one profile read instead of racing.
+  final Map<String, Future<void>> _syncsInFlight = {};
   static const Duration _profileTimeout = Duration(seconds: 6);
   final List<CartItemModel> _cartItems = [];
   String _selectedDeliveryHub = 'Janakpur Hub';
   List<UserAddress> _savedAddresses = [];
   List<RegisteredGear> _registeredGear = [];
 
-  final List<NotificationItemModel> _notifications = [];
+  // Notifications: server ones for the current audience plus ones the app adds
+  // locally (e.g. "order placed"). Removal is per device; read state is per user.
+  List<NotificationItemModel> _remoteNotifications = [];
+  final List<NotificationItemModel> _localNotifications = [];
+  Set<String> _hiddenNotificationIds = {};
+  final Map<String, bool> _readOverrides = {};
+  StreamSubscription<List<NotificationItemModel>>? _notificationSub;
+  String? _notificationAudience;
+  bool _notificationsLoading = false;
+  Object? _notificationsError;
 
   UserModel? get currentUser => _currentUser;
   bool get isAuthenticated => _isAuthenticated && _currentUser != null;
@@ -49,10 +70,22 @@ class AppState extends ChangeNotifier {
     return idx != -1 ? _cartItems[idx].quantity : 0;
   }
 
-  List<NotificationItemModel> get notifications =>
-      List.unmodifiable(_notifications);
-  int get unreadNotificationCount =>
-      _notifications.where((n) => !n.isRead).length;
+  /// Newest first, without removed ones, with this viewer's read state applied.
+  List<NotificationItemModel> get notifications {
+    final seen = <String>{};
+    final result = <NotificationItemModel>[];
+    for (final n in [..._localNotifications, ..._remoteNotifications]) {
+      if (_hiddenNotificationIds.contains(n.id) || !seen.add(n.id)) continue;
+      final read = _readOverrides[n.id];
+      result.add(read == null || read == n.isRead ? n : n.copyWith(isRead: read));
+    }
+    result.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return List.unmodifiable(result);
+  }
+
+  int get unreadNotificationCount => notifications.where((n) => !n.isRead).length;
+  bool get notificationsLoading => _notificationsLoading;
+  Object? get notificationsError => _notificationsError;
 
   List<UserAddress> get savedAddresses => List.unmodifiable(_savedAddresses);
   List<RegisteredGear> get registeredGear => List.unmodifiable(_registeredGear);
@@ -61,6 +94,13 @@ class AppState extends ChangeNotifier {
 
   AppState() {
     _initAuthListener();
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    _notificationSub?.cancel();
+    super.dispose();
   }
 
   void _initAuthListener() {
@@ -74,6 +114,7 @@ class AppState extends ChangeNotifier {
             await _syncFirebaseUser(fbUser);
           }
         } else if (_isAuthenticated) {
+          _clearCart();
           _clearUserState();
           await _saveSessionToPrefs();
           notifyListeners();
@@ -89,14 +130,26 @@ class AppState extends ChangeNotifier {
     _isAuthenticated = false;
     _savedAddresses = [];
     _registeredGear = [];
-    _notifications.clear();
+    _localNotifications.clear();
+    _subscribeNotifications(); // switch to the guest audience
   }
 
   /// Loads the Firestore profile for [fbUser] and makes it the current user.
+  /// A sync already running for the same uid is shared rather than repeated.
+  Future<void> _syncFirebaseUser(User fbUser, {bool throwIfBlocked = false}) {
+    final pending = _syncsInFlight[fbUser.uid];
+    if (pending != null && !throwIfBlocked) return pending;
+    final sync = _doSyncFirebaseUser(fbUser, throwIfBlocked: throwIfBlocked);
+    _syncsInFlight[fbUser.uid] = sync;
+    return sync.whenComplete(() {
+      if (identical(_syncsInFlight[fbUser.uid], sync)) _syncsInFlight.remove(fbUser.uid);
+    });
+  }
+
   /// Creates a customer profile when none exists. If Firestore is unreachable the
   /// user stays signed in with the last known role. Deactivated accounts are signed
   /// out; with [throwIfBlocked] the caller gets a `user-disabled` error to show.
-  Future<void> _syncFirebaseUser(User fbUser, {bool throwIfBlocked = false}) async {
+  Future<void> _doSyncFirebaseUser(User fbUser, {bool throwIfBlocked = false}) async {
     final fallbackName = (fbUser.displayName?.isNotEmpty ?? false)
         ? fbUser.displayName!
         : (fbUser.email?.split('@').first ?? 'Customer');
@@ -133,6 +186,7 @@ class AppState extends ChangeNotifier {
 
     if (profile.status != 'ACTIVE') {
       await FirestoreService().signOut();
+      _clearCart();
       _clearUserState();
       await _saveSessionToPrefs();
       notifyListeners();
@@ -142,52 +196,106 @@ class AppState extends ChangeNotifier {
 
     _currentUser = profile;
     _isAuthenticated = true;
+    _subscribeNotifications();
     await _loadUserData(fbUser.uid);
     await _saveSessionToPrefs();
     notifyListeners();
   }
 
+  // ----------------------------------------------------------------------
+  // Addresses & registered gear: stored on the customer's own customers/{uid}
+  // document (owner-only in firestore.rules), so they sync across devices and
+  // aren't kept in plain local storage.
+  // ----------------------------------------------------------------------
+
+  static String _legacyAddressesKey(String uid) => 'svc_addresses_$uid';
+  static String _legacyGearKey(String uid) => 'svc_gear_$uid';
+
   Future<void> _loadUserData(String userId) async {
+    if (!FirestoreService().isFirebaseAvailable) return;
+    Map<String, dynamic> data;
+    try {
+      final doc = await FirestoreService()
+          .db
+          .collection('customers')
+          .doc(userId)
+          .get()
+          .timeout(_profileTimeout);
+      data = doc.data() ?? const {};
+    } catch (e) {
+      debugPrint('Saved addresses not loaded: $e');
+      return; // keep whatever is already shown
+    }
+    if (_currentUser?.id != userId) return; // signed out or switched meanwhile
+
+    _savedAddresses = _parseList(data['savedAddresses'], UserAddress.fromMap);
+    _registeredGear = _parseList(data['registeredGear'], RegisteredGear.fromMap);
+    await _migrateLegacyUserData(userId);
+  }
+
+  static List<T> _parseList<T>(dynamic raw, T Function(Map<String, dynamic>) parse) {
+    if (raw is! List) return [];
+    return [
+      for (final e in raw)
+        if (e is Map) parse(Map<String, dynamic>.from(e)),
+    ];
+  }
+
+  /// Moves addresses/gear saved by older versions in plain SharedPreferences to
+  /// Firestore (when Firestore has none yet), then deletes the local copies.
+  Future<void> _migrateLegacyUserData(String userId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final addrRaw = prefs.getString('svc_addresses_$userId');
-      if (addrRaw != null && addrRaw.isNotEmpty) {
-        final List list = jsonDecode(addrRaw);
-        _savedAddresses = list
-            .map((e) => UserAddress.fromMap(Map<String, dynamic>.from(e)))
-            .toList();
-      } else {
-        _savedAddresses = [];
-      }
+      final addrRaw = prefs.getString(_legacyAddressesKey(userId));
+      final gearRaw = prefs.getString(_legacyGearKey(userId));
+      if (addrRaw == null && gearRaw == null) return;
 
-      final gearRaw = prefs.getString('svc_gear_$userId');
-      if (gearRaw != null && gearRaw.isNotEmpty) {
-        final List list = jsonDecode(gearRaw);
-        _registeredGear = list
-            .map((e) => RegisteredGear.fromMap(Map<String, dynamic>.from(e)))
-            .toList();
-      } else {
-        _registeredGear = [];
+      var changed = false;
+      if (_savedAddresses.isEmpty && addrRaw != null && addrRaw.isNotEmpty) {
+        _savedAddresses = _parseList(jsonDecode(addrRaw), UserAddress.fromMap);
+        changed = _savedAddresses.isNotEmpty;
       }
-    } catch (e) {
-      debugPrint('Error loading user data: $e');
+      if (_registeredGear.isEmpty && gearRaw != null && gearRaw.isNotEmpty) {
+        final gear = _parseList(jsonDecode(gearRaw), RegisteredGear.fromMap);
+        if (gear.isNotEmpty) {
+          _registeredGear = gear;
+          changed = true;
+        }
+      }
+      if (changed) {
+        await _userDataDoc(userId).set(_userDataFields(), SetOptions(merge: true)).timeout(_profileTimeout);
+      }
+      await prefs.remove(_legacyAddressesKey(userId));
+      await prefs.remove(_legacyGearKey(userId));
+    } catch (e, stack) {
+      // Local copies are kept, so the next sign-in tries again.
+      debugPrint('Legacy address migration failed: $e');
+      _report(e, stack, 'Migrate saved addresses');
     }
   }
 
-  Future<void> _saveUserData(String userId) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        'svc_addresses_$userId',
-        jsonEncode(_savedAddresses.map((a) => a.toMap()).toList()),
-      );
-      await prefs.setString(
-        'svc_gear_$userId',
-        jsonEncode(_registeredGear.map((g) => g.toMap()).toList()),
-      );
-    } catch (e) {
-      debugPrint('Error saving user data: $e');
-    }
+  DocumentReference<Map<String, dynamic>> _userDataDoc(String userId) =>
+      FirestoreService().db.collection('customers').doc(userId);
+
+  Map<String, dynamic> _userDataFields() => {
+        'savedAddresses': _savedAddresses.map((a) => a.toMap()).toList(),
+        'registeredGear': _registeredGear.map((g) => g.toMap()).toList(),
+        'updatedAt': nowIsoUtc(),
+      };
+
+  /// Saves without waiting for the server: Firestore applies it to its local
+  /// cache at once and syncs when online. Failures (e.g. rules) are reported.
+  void _saveUserData(String userId) {
+    if (!FirestoreService().isFirebaseAvailable) return;
+    _userDataDoc(userId).set(_userDataFields(), SetOptions(merge: true)).catchError((Object e, StackTrace stack) {
+      debugPrint('Error saving addresses: $e');
+      _report(e, stack, 'Save addresses');
+    });
+  }
+
+  static void _report(Object error, StackTrace stack, String reason) {
+    if (Firebase.apps.isEmpty) return;
+    FirebaseCrashlytics.instance.recordError(error, stack, reason: reason);
   }
 
   Future<void> addAddress(UserAddress address) async {
@@ -197,7 +305,7 @@ class AppState extends ChangeNotifier {
           _savedAddresses.map((a) => a.copyWith(isDefault: false)).toList();
     }
     _savedAddresses.add(address);
-    await _saveUserData(_currentUser!.id);
+    _saveUserData(_currentUser!.id);
     notifyListeners();
   }
 
@@ -208,7 +316,7 @@ class AppState extends ChangeNotifier {
         !_savedAddresses.any((a) => a.isDefault)) {
       _savedAddresses[0] = _savedAddresses[0].copyWith(isDefault: true);
     }
-    await _saveUserData(_currentUser!.id);
+    _saveUserData(_currentUser!.id);
     notifyListeners();
   }
 
@@ -216,21 +324,21 @@ class AppState extends ChangeNotifier {
     if (_currentUser == null) return;
     _savedAddresses =
         _savedAddresses.map((a) => a.copyWith(isDefault: a.id == id)).toList();
-    await _saveUserData(_currentUser!.id);
+    _saveUserData(_currentUser!.id);
     notifyListeners();
   }
 
   Future<void> registerGear(RegisteredGear gear) async {
     if (_currentUser == null) return;
     _registeredGear.add(gear);
-    await _saveUserData(_currentUser!.id);
+    _saveUserData(_currentUser!.id);
     notifyListeners();
   }
 
   Future<void> removeGear(String id) async {
     if (_currentUser == null) return;
     _registeredGear.removeWhere((g) => g.id == id);
-    await _saveUserData(_currentUser!.id);
+    _saveUserData(_currentUser!.id);
     notifyListeners();
   }
 
@@ -249,6 +357,8 @@ class AppState extends ChangeNotifier {
         _selectedDeliveryHub = savedHub;
       }
 
+      _loadCart(prefs);
+
       final fbUser = FirestoreService().auth.currentUser;
       if (fbUser != null && !fbUser.isAnonymous) {
         final cachedForThisUser = prefs.getString(_kUserId) == fbUser.uid;
@@ -263,7 +373,7 @@ class AppState extends ChangeNotifier {
           createdAt: fbUser.metadata.creationTime ?? DateTime.now(),
         );
         _isAuthenticated = true;
-        await _loadUserData(fbUser.uid);
+        // Profile, addresses and gear load in the background.
         _sessionReconcile = _syncFirebaseUser(fbUser);
       } else {
         _clearUserState();
@@ -273,6 +383,7 @@ class AppState extends ChangeNotifier {
       debugPrint('Session restore note: $e');
     } finally {
       _isSessionLoaded = true;
+      _subscribeNotifications();
       notifyListeners();
     }
   }
@@ -361,6 +472,7 @@ class AppState extends ChangeNotifier {
       _initAuthListener();
       _currentUser = user;
       _isAuthenticated = true;
+      _subscribeNotifications();
       await _loadUserData(user.id);
       await _saveSessionToPrefs();
       notifyListeners();
@@ -381,9 +493,12 @@ class AppState extends ChangeNotifier {
       phone: phone,
     );
 
+    // Same normalisation the service saved, so the screen matches Firestore.
     _currentUser = _currentUser!.copyWith(
       name: name.trim(),
-      phone: phone.trim(),
+      phone: FirestoreService.isValidNepalMobile(phone)
+          ? FirestoreService.normalizeNepalPhone(phone)
+          : phone.trim(),
     );
 
     await _saveSessionToPrefs();
@@ -408,12 +523,14 @@ class AppState extends ChangeNotifier {
 
   Future<void> deleteAccount({String? currentPassword}) async {
     final uid = _currentUser?.id;
+    // Also deletes customers/{uid}, which holds the saved addresses and gear.
     await FirestoreService().deleteAccount(currentPassword: currentPassword);
     if (uid != null) {
       try {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('svc_addresses_$uid');
-        await prefs.remove('svc_gear_$uid');
+        await prefs.remove(_legacyAddressesKey(uid));
+        await prefs.remove(_legacyGearKey(uid));
+        await prefs.remove('$_kHiddenNotificationsPrefix$uid');
       } catch (_) {}
     }
     await signOut();
@@ -421,6 +538,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> signOut() async {
     await FirestoreService().signOut();
+    _clearCart(); // the next person on this phone starts with an empty cart
     _clearUserState();
     await _saveSessionToPrefs();
     notifyListeners();
@@ -431,6 +549,45 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
+  // ----------------------------------------------------------------------
+  // Cart (persisted on the device so it survives restarts)
+  // ----------------------------------------------------------------------
+
+  void _loadCart(SharedPreferences prefs) {
+    try {
+      final raw = prefs.getString(_kCart);
+      if (raw == null || raw.isEmpty) return;
+      _cartItems
+        ..clear()
+        ..addAll(_parseList(jsonDecode(raw), CartItemModel.fromMap).where((i) => i.productId.isNotEmpty));
+    } catch (e) {
+      debugPrint('Saved cart not restored: $e');
+    }
+  }
+
+  void _cartChanged() {
+    notifyListeners();
+    _saveCart();
+  }
+
+  Future<void> _saveCart() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_cartItems.isEmpty) {
+        await prefs.remove(_kCart);
+      } else {
+        await prefs.setString(_kCart, jsonEncode(_cartItems.map((i) => i.toMap()).toList()));
+      }
+    } catch (e) {
+      debugPrint('Cart not saved: $e');
+    }
+  }
+
+  void _clearCart() {
+    _cartItems.clear();
+    _saveCart();
+  }
+
   void addToCart(CartItemModel newItem) {
     final existingIndex =
         _cartItems.indexWhere((i) => i.productId == newItem.productId);
@@ -439,7 +596,7 @@ class AppState extends ChangeNotifier {
     } else {
       _cartItems.add(newItem);
     }
-    notifyListeners();
+    _cartChanged();
   }
 
   void updateQuantity(String productId, int quantity) {
@@ -450,18 +607,18 @@ class AppState extends ChangeNotifier {
     final index = _cartItems.indexWhere((i) => i.productId == productId);
     if (index != -1) {
       _cartItems[index].quantity = quantity;
-      notifyListeners();
+      _cartChanged();
     }
   }
 
   void removeFromCart(String productId) {
     _cartItems.removeWhere((i) => i.productId == productId);
-    notifyListeners();
+    _cartChanged();
   }
 
   void clearCart() {
     _cartItems.clear();
-    notifyListeners();
+    _cartChanged();
   }
 
   void setDeliveryHub(String hub) async {
@@ -473,52 +630,150 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
-  void markNotificationAsRead(String id) {
-    final index = _notifications.indexWhere((n) => n.id == id);
-    if (index != -1 && !_notifications[index].isRead) {
-      _notifications[index] = _notifications[index].copyWith(isRead: true);
+  // ----------------------------------------------------------------------
+  // Notifications (live for the whole session, so badges are always current)
+  // ----------------------------------------------------------------------
+
+  /// Listens to the notifications for the current audience (a signed-in user or
+  /// guests). Does nothing if already listening for that audience.
+  void _subscribeNotifications() {
+    if (!FirestoreService().isFirebaseAvailable) return;
+    final user = _currentUser;
+    final audience = user?.id ?? 'guest';
+    if (_notificationSub != null && _notificationAudience == audience) return;
+
+    _notificationSub?.cancel();
+    _notificationAudience = audience;
+    _remoteNotifications = [];
+    _readOverrides.clear();
+    _hiddenNotificationIds = {};
+    _notificationsLoading = true;
+    _notificationsError = null;
+    _loadNotificationPrefs(audience);
+
+    _notificationSub = FirestoreService()
+        .streamNotifications(userId: user?.id, isGuest: user == null)
+        .listen((list) {
+      _remoteNotifications = list;
+      _notificationsLoading = false;
+      _notificationsError = null;
+      _pruneHiddenNotifications();
       notifyListeners();
+    }, onError: (Object e) {
+      _notificationsLoading = false;
+      _notificationsError = e;
+      notifyListeners();
+    });
+  }
+
+  /// Pull-to-refresh / retry: listens again from scratch.
+  Future<void> refreshNotifications() async {
+    _notificationSub?.cancel();
+    _notificationSub = null;
+    _subscribeNotifications();
+    notifyListeners();
+  }
+
+  Future<void> _loadNotificationPrefs(String audience) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_notificationAudience != audience) return;
+      _hiddenNotificationIds = {
+        ..._hiddenNotificationIds,
+        ...?prefs.getStringList('$_kHiddenNotificationsPrefix$audience'),
+      };
+      if (audience == 'guest') {
+        for (final id in prefs.getStringList(_kGuestReadNotifications) ?? const <String>[]) {
+          _readOverrides.putIfAbsent(id, () => true);
+        }
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Notification preferences not loaded: $e');
     }
+  }
+
+  Future<void> _saveNotificationPrefs() async {
+    final audience = _notificationAudience;
+    if (audience == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('$_kHiddenNotificationsPrefix$audience', _hiddenNotificationIds.toList());
+      if (audience == 'guest') {
+        await prefs.setStringList(
+          _kGuestReadNotifications,
+          [for (final e in _readOverrides.entries) if (e.value) e.key],
+        );
+      }
+    } catch (e) {
+      debugPrint('Notification preferences not saved: $e');
+    }
+  }
+
+  /// Forgets removed ids whose notification no longer exists, so the list stays small.
+  void _pruneHiddenNotifications() {
+    final known = {for (final n in _remoteNotifications) n.id, for (final n in _localNotifications) n.id};
+    final before = _hiddenNotificationIds.length;
+    _hiddenNotificationIds.retainWhere(known.contains);
+    if (_hiddenNotificationIds.length != before) _saveNotificationPrefs();
+  }
+
+  /// Applies [read] at once and saves it: to Firestore `readBy` for a signed-in
+  /// user's server notifications, on the device for guests.
+  void _setNotificationsRead(Iterable<String> ids, bool read) {
+    final list = ids.toList();
+    if (list.isEmpty) return;
+    for (final id in list) {
+      _readOverrides[id] = read;
+    }
+    notifyListeners();
+    _saveNotificationPrefs();
+
+    final uid = _currentUser?.id;
+    if (uid == null || !FirestoreService().isFirebaseAvailable) return;
+    final remoteIds = {for (final n in _remoteNotifications) n.id};
+    final toWrite = list.where(remoteIds.contains);
+    if (toWrite.isNotEmpty) {
+      FirestoreService().setNotificationsRead(toWrite, userId: uid, read: read);
+    }
+  }
+
+  void markNotificationAsRead(String id) {
+    final n = notifications.where((n) => n.id == id).firstOrNull;
+    if (n != null && !n.isRead) _setNotificationsRead([id], true);
   }
 
   void toggleNotificationRead(String id) {
-    final index = _notifications.indexWhere((n) => n.id == id);
-    if (index != -1) {
-      _notifications[index] = _notifications[index].copyWith(
-        isRead: !_notifications[index].isRead,
-      );
-      notifyListeners();
-    }
+    final n = notifications.where((n) => n.id == id).firstOrNull;
+    if (n != null) _setNotificationsRead([id], !n.isRead);
   }
 
   void markAllNotificationsAsRead() {
-    bool changed = false;
-    for (int i = 0; i < _notifications.length; i++) {
-      if (!_notifications[i].isRead) {
-        _notifications[i] = _notifications[i].copyWith(isRead: true);
-        changed = true;
-      }
-    }
-    if (changed) notifyListeners();
+    _setNotificationsRead([for (final n in notifications) if (!n.isRead) n.id], true);
   }
 
-  void removeNotification(String id) {
-    _notifications.removeWhere((n) => n.id == id);
+  /// Removal is remembered on this device; shared broadcasts can't be deleted.
+  void _hideNotifications(Iterable<String> ids) {
+    _hiddenNotificationIds.addAll(ids);
     notifyListeners();
+    _saveNotificationPrefs();
   }
 
-  void clearAllNotifications() {
-    _notifications.clear();
-    notifyListeners();
-  }
+  void removeNotification(String id) => _hideNotifications([id]);
 
-  void clearReadNotifications() {
-    _notifications.removeWhere((n) => n.isRead);
-    notifyListeners();
-  }
+  void clearAllNotifications() => _hideNotifications([for (final n in notifications) n.id]);
 
+  void clearReadNotifications() =>
+      _hideNotifications([for (final n in notifications) if (n.isRead) n.id]);
+
+  /// Adds a notification created on the device, or restores a removed one (undo).
   void addNotification(NotificationItemModel item) {
-    _notifications.insert(0, item);
+    if (_hiddenNotificationIds.remove(item.id)) {
+      _saveNotificationPrefs();
+    } else if (!_localNotifications.any((n) => n.id == item.id) &&
+        !_remoteNotifications.any((n) => n.id == item.id)) {
+      _localNotifications.insert(0, item);
+    }
     notifyListeners();
   }
 }

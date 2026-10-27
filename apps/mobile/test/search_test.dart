@@ -21,6 +21,11 @@ ProductModel _product(String id, String name, String brand, String category) =>
     });
 
 void main() {
+  test('a plural only falls back to its singular as a whole word', () {
+    expect(searchScore('lens', ['Lenovo ThinkPad X1']), 0);
+    expect(searchScore('lenses', ['Canon RF 50mm Lens']), greaterThan(0));
+  });
+
   TestWidgetsFlutterBinding.ensureInitialized();
   GoogleFonts.config.allowRuntimeFetching = false;
   setUp(() => SharedPreferences.setMockInitialValues({}));

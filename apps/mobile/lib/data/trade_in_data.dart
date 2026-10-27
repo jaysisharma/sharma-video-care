@@ -410,8 +410,9 @@ TradeInValuationResult calculateTradeInValuation({
   final minCash = (((calculatedBase * 0.94) / 500).round() * 500).toInt();
   final maxCash = (((calculatedBase * 1.04) / 500).round() * 500).toInt();
 
-  final minCredit = (minCash * 1.1).round();
-  final maxCredit = (maxCash * 1.1).round();
+  // Rounded to Rs. 500 like the cash offer.
+  final minCredit = ((minCash * 1.1) / 500).round() * 500;
+  final maxCredit = ((maxCash * 1.1) / 500).round() * 500;
 
   return TradeInValuationResult(
     minCash: minCash,

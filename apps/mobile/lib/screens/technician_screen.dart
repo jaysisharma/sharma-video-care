@@ -71,7 +71,7 @@ class _TechnicianPortalScreenState extends State<TechnicianPortalScreen> {
                           'diagnosisFindings': findingsCtrl.text.trim(),
                           'technicalDiagnosis': diagnosisCtrl.text.trim(),
                           'partsRequired': partsCtrl.text.trim(),
-                          'updatedAt': DateTime.now().toIso8601String(),
+                          'updatedAt': DateTime.now().toUtc().toIso8601String(),
                         });
 
                         if (context.mounted) {
@@ -98,8 +98,8 @@ class _TechnicianPortalScreenState extends State<TechnicianPortalScreen> {
     try {
       await FirestoreService().db.collection('serviceRequests').doc(job.id).update({
         'status': 'COMPLETED',
-        'completedAt': DateTime.now().toIso8601String(),
-        'updatedAt': DateTime.now().toIso8601String(),
+        'completedAt': DateTime.now().toUtc().toIso8601String(),
+        'updatedAt': DateTime.now().toUtc().toIso8601String(),
       });
       if (mounted) {
         SvcSnackbar.show(context, 'Job marked as Completed!', type: SnackType.success);

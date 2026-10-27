@@ -293,4 +293,18 @@ void main() {
       expect(appState.notifications.every((n) => !n.isRead), isTrue);
     });
   });
+
+  group('Cart persistence', () {
+    test('the cart is restored after an app restart', () async {
+      SharedPreferences.setMockInitialValues({});
+      final first = AppState();
+      first.addToCart(CartItemModel(productId: 'prod-1', productType: 'NEW', name: 'Sony A7 IV', unitPrice: 310000, quantity: 2));
+      await Future<void>.delayed(Duration.zero); // let the save finish
+
+      final restarted = AppState();
+      await restarted.loadSession();
+      expect(restarted.getItemQuantity('prod-1'), 2);
+      expect(restarted.cartSubtotal, 620000);
+    });
+  });
 }

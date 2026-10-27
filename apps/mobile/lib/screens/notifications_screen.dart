@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
-import '../services/firestore_service.dart';
 import 'shop_screen.dart';
 import 'service_request_screen.dart';
 import 'trade_in_screen.dart';
@@ -22,8 +21,6 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   String _selectedCategory = 'all';
-  bool _isLoading = false;
-  bool _hasError = false;
   String? _errorMessage;
 
   static const List<Map<String, dynamic>> _categories = [
@@ -34,56 +31,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     {'id': 'system', 'label': 'System', 'icon': Icons.shield_outlined},
   ];
 
-  StreamSubscription<List<NotificationItemModel>>? _notifSubscription;
+  // AppState keeps notifications live for the whole session (for the badges);
+  // this screen only shows them.
+  bool get _isLoading =>
+      widget.appState.notificationsLoading && widget.appState.notifications.isEmpty;
+  bool get _hasError =>
+      widget.appState.notificationsError != null && widget.appState.notifications.isEmpty;
 
-  @override
-  void initState() {
-    super.initState();
-    _subscribeNotifications();
-  }
-
-  void _subscribeNotifications() {
-    final user = widget.appState.currentUser;
-    final isGuest = user == null;
-    final userId = user?.id;
-
-    if (widget.appState.notifications.isEmpty) {
-      setState(() => _isLoading = true);
-    }
-
-    _notifSubscription?.cancel();
-    _notifSubscription = FirestoreService()
-        .streamNotifications(userId: userId, isGuest: isGuest)
-        .listen((remoteNotifs) {
-      if (!mounted) return;
-      for (final n in remoteNotifs) {
-        final existingIndex =
-            widget.appState.notifications.indexWhere((item) => item.id == n.id);
-        if (existingIndex == -1) {
-          widget.appState.addNotification(n);
-        }
-      }
-      setState(() {
-        _isLoading = false;
-        _hasError = false;
-      });
-    }, onError: (err) {
-      debugPrint('Error streaming notifications: $err');
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _notifSubscription?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _loadNotifications() async {
-    _subscribeNotifications();
-  }
+  Future<void> _loadNotifications() => widget.appState.refreshNotifications();
 
   String _formatTimestamp(DateTime dt) {
     final now = DateTime.now();
@@ -174,10 +129,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   void _handleNotificationTap(NotificationItemModel item) {
     widget.appState.markNotificationAsRead(item.id);
-    FirestoreService().markNotificationRead(
-      item.id,
-      userId: widget.appState.currentUser?.id,
-    );
 
     if (item.actionRoute != null) {
       switch (item.actionRoute) {

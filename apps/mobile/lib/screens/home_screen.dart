@@ -588,7 +588,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Auto-advance hero carousel every 4.5 seconds
     _heroAutoTimer = Timer.periodic(const Duration(milliseconds: 4500), (timer) {
-      if (_heroController.hasClients) {
+      if (_isVisibleTab && _heroController.hasClients) {
         final nextIndex = (_currentHeroIndex + 1) % _heroSlides.length;
         _heroController.animateToPage(
           nextIndex,
@@ -600,9 +600,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Flash deals 1-second countdown ticker
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _clock.value = DateTime.now();
+      if (_isVisibleTab) _clock.value = DateTime.now();
     });
   }
+
+  /// False while another bottom tab is showing (MainNavigationScreen turns
+  /// TickerMode off for hidden tabs), so the timers above skip their work.
+  bool get _isVisibleTab => mounted && TickerMode.valuesOf(context).enabled;
 
   @override
   void dispose() {
@@ -1231,13 +1235,17 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                isNe ? 'प्रमुख विभागहरू' : 'Shop by Department',
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: SvcColors.ink,
-                  letterSpacing: -0.2,
+              Flexible(
+                child: Text(
+                  isNe ? 'प्रमुख विभागहरू' : 'Shop by Department',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: SvcColors.ink,
+                    letterSpacing: -0.2,
+                  ),
                 ),
               ),
               InkWell(
@@ -2689,15 +2697,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   child: Icon(icon, color: iconColor, size: 19),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    tag,
-                    style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      tag,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)),
+                    ),
                   ),
                 ),
               ],

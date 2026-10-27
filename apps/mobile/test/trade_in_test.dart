@@ -48,6 +48,8 @@ void main() {
       expect(result.minCash > 0, true);
       expect(result.maxCash >= result.minCash, true);
       expect(result.minCredit > result.minCash, true);
+      expect(result.minCredit % 500, 0); // credit is rounded like cash
+      expect(result.maxCredit % 500, 0);
       expect(result.accessoriesBonus, 4500); // 2500 + 2000
     });
   });

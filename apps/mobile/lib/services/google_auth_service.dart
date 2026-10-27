@@ -71,10 +71,12 @@ class GoogleAuthService {
     }
   }
 
-  /// Clears the cached Google account so the picker shows again next time.
+  /// Clears the cached Google account so the picker shows again next time. The
+  /// plugin is started first if needed (e.g. after an app restart).
   static Future<void> signOut() async {
-    if (_initialization == null) return;
+    if (!isConfigured) return;
     try {
+      await _ensureInitialized();
       await GoogleSignIn.instance.signOut();
     } catch (e) {
       debugPrint('Google sign-out note: $e');

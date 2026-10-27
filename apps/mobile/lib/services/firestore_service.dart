@@ -1,98 +1,32 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import '../models/models.dart';
-import '../firebase_options.dart';
 import 'google_auth_service.dart';
+
+/// Current time as a UTC ISO-8601 string ("...Z"), the same format the website
+/// writes, so string ordering and parsing agree across app, web and admin.
+String nowIsoUtc() => DateTime.now().toUtc().toIso8601String();
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
   factory FirestoreService() => _instance;
   FirestoreService._internal();
 
-  /// Ensures Firebase core is ready before performing operations.
-  /// If Firebase was not ready during main() cold start, this initializes it on demand.
-  Future<void> ensureInitialized() async {
-    if (isFirebaseAvailable) return;
-    try {
-      if (Firebase.apps.isEmpty) {
-        try {
-          await Firebase.initializeApp(
-            options: DefaultFirebaseOptions.currentPlatform,
-          );
-        } on FirebaseException catch (e) {
-          if (e.code == 'duplicate-app') {
-            Firebase.app();
-          } else {
-            rethrow;
-          }
-        }
-      }
-    } catch (_) {
-      try {
-        Firebase.app();
-      } catch (_) {
-        try {
-          await Firebase.initializeApp();
-        } catch (_) {}
-      }
-    }
-  }
+  /// main() only starts the app once Firebase is up; this is false in tests.
+  bool get isFirebaseAvailable => Firebase.apps.isNotEmpty;
 
-  bool get isFirebaseAvailable {
-    if (Firebase.apps.isNotEmpty) return true;
-    try {
-      Firebase.app();
-      return true;
-    } catch (_) {
-      try {
-        FirebaseAuth.instance;
-        return true;
-      } catch (_) {
-        return false;
-      }
-    }
-  }
-
-  FirebaseFirestore get db {
-    try {
-      return FirebaseFirestore.instance;
-    } catch (_) {
-      try {
-        Firebase.app();
-        return FirebaseFirestore.instance;
-      } catch (e) {
-        throw StateError("Firebase Firestore unavailable: $e");
-      }
-    }
-  }
-
-  FirebaseAuth get auth {
-    try {
-      return FirebaseAuth.instance;
-    } catch (_) {
-      try {
-        Firebase.app();
-        return FirebaseAuth.instance;
-      } catch (e) {
-        throw StateError("Firebase Auth unavailable: $e");
-      }
-    }
-  }
+  FirebaseFirestore get db => FirebaseFirestore.instance;
+  FirebaseAuth get auth => FirebaseAuth.instance;
 
   FirebaseFirestore get _db => db;
   FirebaseAuth get _auth => auth;
 
-  User? get currentFirebaseUser {
-    if (!isFirebaseAvailable) return null;
-    try {
-      return auth.currentUser;
-    } catch (_) {
-      return null;
-    }
-  }
+  User? get currentFirebaseUser => isFirebaseAvailable ? _auth.currentUser : null;
 
   /// Unguessable customer id for guest orders/requests ("guest-<32 hex chars>"),
   /// matching isGuestId() in firestore.rules.
@@ -102,6 +36,45 @@ class FirestoreService {
     return 'guest-$hex';
   }
 
+  /// Parses each document on its own so one malformed record is skipped (and
+  /// reported) instead of failing the whole list.
+  static List<T> _parseDocs<T>(
+    Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    T Function(String id, Map<String, dynamic> data) parse,
+    String label, {
+    bool Function(Map<String, dynamic> data)? include,
+  }) {
+    final list = <T>[];
+    for (final doc in docs) {
+      final data = doc.data();
+      if (include != null && !include(data)) continue;
+      try {
+        list.add(parse(doc.id, data));
+      } catch (e, stack) {
+        debugPrint('Failed to parse $label ${doc.id}: $e');
+        _report(e, stack, 'Parse $label ${doc.id}');
+      }
+    }
+    return list;
+  }
+
+  /// Passes stream errors through to the screen (which shows its error state)
+  /// and reports them, instead of swallowing them and leaving screens loading forever.
+  static Stream<T> _reportErrors<T>(Stream<T> stream, String label) {
+    return stream.transform(StreamTransformer<T, T>.fromHandlers(
+      handleError: (error, stack, sink) {
+        debugPrint('Firestore $label error: $error');
+        _report(error, stack, 'Firestore $label');
+        sink.addError(error, stack);
+      },
+    ));
+  }
+
+  static void _report(Object error, StackTrace stack, String reason) {
+    if (Firebase.apps.isEmpty) return;
+    FirebaseCrashlytics.instance.recordError(error, stack, reason: reason);
+  }
+
   // ----------------------------------------------------------------------
   // AUTHENTICATION & USER PROFILE
   // ----------------------------------------------------------------------
@@ -109,7 +82,6 @@ class FirestoreService {
   /// Authenticates only. The profile is loaded by AppState so there is a single
   /// place that reads it (and can fall back when Firestore is unreachable).
   Future<User> signIn({required String email, required String password}) async {
-    await ensureInitialized();
     final cred = await _auth.signInWithEmailAndPassword(
       email: email.trim(),
       password: password,
@@ -130,7 +102,9 @@ class FirestoreService {
     return RegExp(r'^9[678]\d{8}$').hasMatch(digits);
   }
 
-  /// Writes the users/{uid} and customers/{uid} documents for a new customer.
+  /// Writes the users/{uid} and customers/{uid} documents for a new customer, in
+  /// one batch. Throws if they can't be written; AppState creates any missing
+  /// profile again on the next sign-in.
   Future<UserModel> createCustomerProfile({
     required User user,
     required String name,
@@ -138,6 +112,7 @@ class FirestoreService {
     required String phone,
   }) async {
     final now = DateTime.now();
+    final nowIso = now.toUtc().toIso8601String();
     final profile = UserModel(
       id: user.uid,
       name: name,
@@ -148,41 +123,34 @@ class FirestoreService {
       createdAt: now,
     );
 
-    try {
-      final docRef = _db.collection('users').doc(user.uid);
-      final docSnap = await docRef.get();
-      if (!docSnap.exists) {
-        await docRef.set({
-          'name': profile.name,
-          'email': profile.email,
-          'phone': profile.phone,
-          'role': 'customer',
-          'status': 'ACTIVE',
-          'createdAt': now.toIso8601String(),
-          'updatedAt': now.toIso8601String(),
-        });
-      } else {
-        await docRef.set({
-          'name': profile.name,
-          'phone': profile.phone,
-          'updatedAt': now.toIso8601String(),
-        }, SetOptions(merge: true));
-      }
-    } catch (e) {
-      debugPrint('User profile document notice: $e');
-    }
-
-    try {
-      await _db.collection('customers').doc(user.uid).set({
-        'userId': user.uid,
+    final userRef = _db.collection('users').doc(user.uid);
+    final userExists = (await userRef.get()).exists;
+    final batch = _db.batch();
+    if (!userExists) {
+      batch.set(userRef, {
         'name': profile.name,
         'email': profile.email,
         'phone': profile.phone,
-        'createdAt': now.toIso8601String(),
+        'role': 'customer',
+        'status': 'ACTIVE',
+        'createdAt': nowIso,
+        'updatedAt': nowIso,
+      });
+    } else {
+      batch.set(userRef, {
+        'name': profile.name,
+        'phone': profile.phone,
+        'updatedAt': nowIso,
       }, SetOptions(merge: true));
-    } catch (e) {
-      debugPrint('Customer profile document notice: $e');
     }
+    batch.set(_db.collection('customers').doc(user.uid), {
+      'userId': user.uid,
+      'name': profile.name,
+      'email': profile.email,
+      'phone': profile.phone,
+      'createdAt': nowIso,
+    }, SetOptions(merge: true));
+    await batch.commit();
 
     return profile;
   }
@@ -193,7 +161,6 @@ class FirestoreService {
     required String phone,
     required String password,
   }) async {
-    await ensureInitialized();
     final cleanName = name.trim();
     final cleanEmail = email.trim();
     final credential = EmailAuthProvider.credential(email: cleanEmail, password: password);
@@ -229,8 +196,10 @@ class FirestoreService {
         email: cleanEmail,
         phone: normalizeNepalPhone(phone),
       );
-    } catch (e) {
-      debugPrint('createCustomerProfile notice: $e');
+    } catch (e, stack) {
+      // The account exists; the profile is created again on the next sign-in.
+      debugPrint('createCustomerProfile failed: $e');
+      _report(e, stack, 'Create customer profile');
       return UserModel(
         id: user.uid,
         name: cleanName,
@@ -250,18 +219,20 @@ class FirestoreService {
   }) async {
     final cleanName = name.trim();
     final cleanPhone = isValidNepalMobile(phone) ? normalizeNepalPhone(phone) : phone.trim();
+    final nowIso = nowIsoUtc();
 
-    await _db.collection('users').doc(uid).set({
-      'name': cleanName,
-      'phone': cleanPhone,
-      'updatedAt': DateTime.now().toIso8601String(),
-    }, SetOptions(merge: true));
-
-    await _db.collection('customers').doc(uid).set({
-      'name': cleanName,
-      'phone': cleanPhone,
-      'updatedAt': DateTime.now().toIso8601String(),
-    }, SetOptions(merge: true));
+    final batch = _db.batch()
+      ..set(_db.collection('users').doc(uid), {
+        'name': cleanName,
+        'phone': cleanPhone,
+        'updatedAt': nowIso,
+      }, SetOptions(merge: true))
+      ..set(_db.collection('customers').doc(uid), {
+        'name': cleanName,
+        'phone': cleanPhone,
+        'updatedAt': nowIso,
+      }, SetOptions(merge: true));
+    await batch.commit();
 
     try {
       await _auth.currentUser?.updateDisplayName(cleanName);
@@ -287,27 +258,22 @@ class FirestoreService {
   }
 
   Future<void> sendPasswordResetEmail(String email) async {
-    await ensureInitialized();
     await _auth.sendPasswordResetEmail(email: email.trim());
   }
 
   bool get isEmailVerified => _auth.currentUser?.emailVerified ?? false;
 
   Future<void> resendVerificationEmail() async {
-    await ensureInitialized();
     final user = _auth.currentUser;
     if (user != null && !user.emailVerified) {
       await user.sendEmailVerification();
     }
   }
 
-  /// Deletes the profile documents and the Firebase Auth account (required by
-  /// App Store guideline 5.1.1(v)). Orders and repair records are retained.
   /// Signs in with Google. A guest who used chat (anonymous) is upgraded in place so
   /// their support conversation is kept; if that Google account already exists, it
   /// simply signs in to it.
   Future<User> signInWithGoogle() async {
-    await ensureInitialized();
     final idToken = await GoogleAuthService.requestIdToken();
     final credential = GoogleAuthProvider.credential(idToken: idToken);
 
@@ -324,7 +290,6 @@ class FirestoreService {
 
   /// Signs in with Apple (iOS). Like Google, an anonymous guest is upgraded in place.
   Future<User> signInWithApple() async {
-    await ensureInitialized();
     final provider = AppleAuthProvider()..addScope('email')..addScope('name');
     final current = _auth.currentUser;
     UserCredential cred;
@@ -388,15 +353,22 @@ class FirestoreService {
             await _auth.revokeTokenWithAuthorizationCode(authCode);
           } catch (_) {}
         }
-      default:
+      case 'google.com': // GoogleAuthProvider.PROVIDER_ID
         final idToken = await GoogleAuthService.requestIdToken();
         await user.reauthenticateWithCredential(GoogleAuthProvider.credential(idToken: idToken));
+      default:
+        throw FirebaseAuthException(
+          code: 'unsupported-provider',
+          message: 'This account type cannot be deleted from the app. Please contact support.',
+        );
     }
 
-    try {
-      await _db.collection('customers').doc(user.uid).delete();
-    } catch (_) {}
-    await _db.collection('users').doc(user.uid).delete();
+    // Profile docs go first: the rules need the signed-in user to delete them.
+    // The fresh re-authentication above makes the final user.delete() reliable.
+    final batch = _db.batch()
+      ..delete(_db.collection('customers').doc(user.uid))
+      ..delete(_db.collection('users').doc(user.uid));
+    await batch.commit();
     await user.delete();
     await GoogleAuthService.signOut();
   }
@@ -414,54 +386,23 @@ class FirestoreService {
   // PRODUCTS & STORE
   // ----------------------------------------------------------------------
 
+  /// Products the admin has switched off (`active: false`) are left out.
+  static bool _isActive(Map<String, dynamic> data) => data['active'] != false;
+
   Stream<List<ProductModel>> streamProducts() {
-    if (!isFirebaseAvailable) {
-      return Stream.value(const <ProductModel>[]);
-    }
-    try {
-      return _db.collection('products').snapshots().map((snapshot) {
-        final list = <ProductModel>[];
-        for (final doc in snapshot.docs) {
-          try {
-            list.add(ProductModel.fromFirestore(doc.id, doc.data()));
-          } catch (e) {
-            debugPrint('Failed to parse product ${doc.id}: $e');
-          }
-        }
-        return list;
-      }).handleError((Object error) {
-        debugPrint('Firestore streamProducts error: $error');
-        return const <ProductModel>[];
-      });
-    } catch (e) {
-      debugPrint('Firestore streamProducts init error: $e');
-      return Stream.value(const <ProductModel>[]);
-    }
+    return _reportErrors(
+      _db.collection('products').snapshots().map((snap) =>
+          _parseDocs(snap.docs, ProductModel.fromFirestore, 'product', include: _isActive)),
+      'products',
+    );
   }
 
   Stream<List<UsedProductModel>> streamUsedProducts() {
-    if (!isFirebaseAvailable) {
-      return Stream.value(const <UsedProductModel>[]);
-    }
-    try {
-      return _db.collection('usedProducts').snapshots().map((snapshot) {
-        final list = <UsedProductModel>[];
-        for (final doc in snapshot.docs) {
-          try {
-            list.add(UsedProductModel.fromFirestore(doc.id, doc.data()));
-          } catch (e) {
-            debugPrint('Failed to parse used product ${doc.id}: $e');
-          }
-        }
-        return list;
-      }).handleError((Object error) {
-        debugPrint('Firestore streamUsedProducts error: $error');
-        return const <UsedProductModel>[];
-      });
-    } catch (e) {
-      debugPrint('Firestore streamUsedProducts init error: $e');
-      return Stream.value(const <UsedProductModel>[]);
-    }
+    return _reportErrors(
+      _db.collection('usedProducts').snapshots().map((snap) =>
+          _parseDocs(snap.docs, UsedProductModel.fromFirestore, 'used product', include: _isActive)),
+      'usedProducts',
+    );
   }
 
   // ----------------------------------------------------------------------
@@ -482,7 +423,7 @@ class FirestoreService {
     List<String> photoUrls = const [],
     String? photoUrl,
   }) async {
-    final now = DateTime.now();
+    final nowIso = nowIsoUtc();
     final allPhotos = [
       if (photoUrl != null && photoUrl.isNotEmpty) photoUrl,
       ...photoUrls,
@@ -506,23 +447,26 @@ class FirestoreService {
         'preferredDate': preferredDate,
         'preferredTimeSlot': preferredTimeSlot,
       },
-      'createdAt': now.toIso8601String(),
-      'updatedAt': now.toIso8601String(),
+      'createdAt': nowIso,
+      'updatedAt': nowIso,
     });
 
     return docRef.id;
   }
 
+  /// Repairs for one customer or one technician. Exactly one id is required: the
+  /// rules only allow listing your own records, so an unfiltered query is denied.
   Stream<List<ServiceRequestModel>> streamServiceRequests({String? customerId, String? technicianId}) {
-    Query<Map<String, dynamic>> query = _db.collection('serviceRequests');
-    if (customerId != null) {
-      query = query.where('customerId', isEqualTo: customerId);
-    } else if (technicianId != null) {
-      query = query.where('assignedTechnicianId', isEqualTo: technicianId);
+    if ((customerId == null) == (technicianId == null)) {
+      throw ArgumentError('Pass exactly one of customerId or technicianId');
     }
-    return query.snapshots().map((snap) => snap.docs
-        .map((d) => ServiceRequestModel.fromFirestore(d.id, d.data()))
-        .toList());
+    final query = customerId != null
+        ? _db.collection('serviceRequests').where('customerId', isEqualTo: customerId)
+        : _db.collection('serviceRequests').where('assignedTechnicianId', isEqualTo: technicianId);
+    return _reportErrors(
+      query.snapshots().map((snap) => _parseDocs(snap.docs, ServiceRequestModel.fromFirestore, 'service request')),
+      'serviceRequests',
+    );
   }
 
   Stream<List<ServiceRequestModel>> streamCustomerRequests(String customerId) =>
@@ -537,25 +481,27 @@ class FirestoreService {
     return ServiceRequestModel.fromFirestore(doc.id, doc.data()!);
   }
 
-  Stream<List<ServiceQuoteModel>> streamQuotes({String? customerId}) {
-    Query<Map<String, dynamic>> query = _db.collection('quotes');
-    if (customerId != null) {
-      query = query.where('customerId', isEqualTo: customerId);
-    }
-    return query.snapshots().map((snap) => snap.docs
-        .map((d) => ServiceQuoteModel.fromFirestore(d.id, d.data()))
-        .toList());
+  Stream<List<ServiceQuoteModel>> streamQuotes({required String customerId}) {
+    return _reportErrors(
+      _db
+          .collection('quotes')
+          .where('customerId', isEqualTo: customerId)
+          .snapshots()
+          .map((snap) => _parseDocs(snap.docs, ServiceQuoteModel.fromFirestore, 'quote')),
+      'quotes',
+    );
   }
 
   Stream<List<ServiceQuoteModel>> streamCustomerQuotes(String customerId) =>
       streamQuotes(customerId: customerId);
 
   Future<void> updateQuoteStatus(String quoteId, String status) async {
+    final nowIso = nowIsoUtc();
     await _db.collection('quotes').doc(quoteId).update({
       'status': status,
-      'updatedAt': DateTime.now().toIso8601String(),
-      if (status == 'ACCEPTED') 'acceptedAt': DateTime.now().toIso8601String(),
-      if (status == 'REJECTED') 'rejectedAt': DateTime.now().toIso8601String(),
+      'updatedAt': nowIso,
+      if (status == 'ACCEPTED') 'acceptedAt': nowIso,
+      if (status == 'REJECTED') 'rejectedAt': nowIso,
     });
   }
 
@@ -579,7 +525,7 @@ class FirestoreService {
     required int total,
     required List<CartItemModel> items,
   }) async {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     final docRef = await _db.collection('orders').add({
       'customerId': customerId,
       'customerName': customerName,
@@ -634,7 +580,8 @@ class FirestoreService {
   }
 
   /// Records a bank-transfer payment for review and marks the order as submitted
-  /// (the transition firestore.rules allows customers and guests to make).
+  /// (the transition firestore.rules allows customers and guests to make). Both
+  /// writes go in one batch so a retry can't leave a payment without its order update.
   Future<void> submitPaymentProof({
     required String orderId,
     required String customerId,
@@ -642,32 +589,35 @@ class FirestoreService {
     required String referenceNumber,
     String? proofImageUrl,
   }) async {
-    final now = DateTime.now().toIso8601String();
-    await _db.collection('payments').add({
-      'orderId': orderId,
-      'customerId': customerId,
-      'method': 'BANK_TRANSFER',
-      'amount': amount,
-      'referenceNumber': referenceNumber.trim(),
-      if (proofImageUrl != null) 'proofImageUrl': proofImageUrl,
-      'status': 'PENDING_VERIFICATION',
-      'submittedAt': now,
-    });
-    await _db.collection('orders').doc(orderId).update({
-      'paymentStatus': 'PENDING_VERIFICATION',
-      'orderStatus': 'PAYMENT_SUBMITTED',
-      'updatedAt': now,
-    });
+    final nowIso = nowIsoUtc();
+    final batch = _db.batch()
+      ..set(_db.collection('payments').doc(), {
+        'orderId': orderId,
+        'customerId': customerId,
+        'method': 'BANK_TRANSFER',
+        'amount': amount,
+        'referenceNumber': referenceNumber.trim(),
+        if (proofImageUrl != null) 'proofImageUrl': proofImageUrl,
+        'status': 'PENDING_VERIFICATION',
+        'submittedAt': nowIso,
+      })
+      ..update(_db.collection('orders').doc(orderId), {
+        'paymentStatus': 'PENDING_VERIFICATION',
+        'orderStatus': 'PAYMENT_SUBMITTED',
+        'updatedAt': nowIso,
+      });
+    await batch.commit();
   }
 
-  Stream<List<OrderModel>> streamOrders({String? customerId}) {
-    Query<Map<String, dynamic>> query = _db.collection('orders');
-    if (customerId != null) {
-      query = query.where('customerId', isEqualTo: customerId);
-    }
-    return query.snapshots().map((snap) => snap.docs
-        .map((d) => OrderModel.fromFirestore(d.id, d.data()))
-        .toList());
+  Stream<List<OrderModel>> streamOrders({required String customerId}) {
+    return _reportErrors(
+      _db
+          .collection('orders')
+          .where('customerId', isEqualTo: customerId)
+          .snapshots()
+          .map((snap) => _parseDocs(snap.docs, OrderModel.fromFirestore, 'order')),
+      'orders',
+    );
   }
 
   Stream<List<OrderModel>> streamCustomerOrders(String customerId) =>
@@ -682,7 +632,7 @@ class FirestoreService {
     required String city,
     required String notes,
   }) async {
-    final now = DateTime.now();
+    final nowIso = nowIsoUtc();
     final docRef = await _db.collection('sourceRequests').add({
       'customerId': customerId,
       'customerName': customerName,
@@ -693,40 +643,22 @@ class FirestoreService {
       'notes': notes,
       'status': 'SUBMITTED',
       'advanceDeposit': 0,
-      'createdAt': now.toIso8601String(),
-      'updatedAt': now.toIso8601String(),
+      'createdAt': nowIso,
+      'updatedAt': nowIso,
     });
 
     return docRef.id;
   }
 
-  Stream<List<SourceRequestModel>> streamSourceRequests({String? customerId}) {
-    if (!isFirebaseAvailable) {
-      return Stream.value(const <SourceRequestModel>[]);
-    }
-    try {
-      Query<Map<String, dynamic>> query = _db.collection('sourceRequests');
-      if (customerId != null) {
-        query = query.where('customerId', isEqualTo: customerId);
-      }
-      return query.snapshots().map((snap) {
-        final list = <SourceRequestModel>[];
-        for (final d in snap.docs) {
-          try {
-            list.add(SourceRequestModel.fromFirestore(d.id, d.data()));
-          } catch (e) {
-            debugPrint('Failed to parse source request ${d.id}: $e');
-          }
-        }
-        return list;
-      }).handleError((Object error) {
-        debugPrint('Firestore streamSourceRequests error: $error');
-        return const <SourceRequestModel>[];
-      });
-    } catch (e) {
-      debugPrint('Firestore streamSourceRequests init error: $e');
-      return Stream.value(const <SourceRequestModel>[]);
-    }
+  Stream<List<SourceRequestModel>> streamSourceRequests({required String customerId}) {
+    return _reportErrors(
+      _db
+          .collection('sourceRequests')
+          .where('customerId', isEqualTo: customerId)
+          .snapshots()
+          .map((snap) => _parseDocs(snap.docs, SourceRequestModel.fromFirestore, 'source request')),
+      'sourceRequests',
+    );
   }
 
   Stream<List<SourceRequestModel>> streamCustomerSourceRequests(String customerId) =>
@@ -737,36 +669,20 @@ class FirestoreService {
   // ----------------------------------------------------------------------
 
   Stream<List<ChatMessageModel>> streamMessages(String conversationId) {
-    if (!isFirebaseAvailable) {
-      return Stream.value(const <ChatMessageModel>[]);
-    }
-    try {
-      return _db
+    return _reportErrors(
+      _db
           .collection('conversations')
           .doc(conversationId)
           .collection('messages')
           .orderBy('createdAt', descending: false)
           .snapshots()
-          .map((snap) {
-            final list = <ChatMessageModel>[];
-            for (final d in snap.docs) {
-              try {
-                list.add(ChatMessageModel.fromFirestore(d.id, d.data()));
-              } catch (e) {
-                debugPrint('Failed to parse chat message ${d.id}: $e');
-              }
-            }
-            return list;
-          }).handleError((Object error) {
-            debugPrint('Firestore streamMessages error: $error');
-            return const <ChatMessageModel>[];
-          });
-    } catch (e) {
-      debugPrint('Firestore streamMessages init error: $e');
-      return Stream.value(const <ChatMessageModel>[]);
-    }
+          .map((snap) => _parseDocs(snap.docs, ChatMessageModel.fromFirestore, 'chat message')),
+      'messages',
+    );
   }
 
+  /// Updates the conversation and adds the message in one batch (the message rule
+  /// checks the conversation as it will be after the write).
   Future<void> sendChatMessage({
     required String conversationId,
     required String senderId,
@@ -775,90 +691,86 @@ class FirestoreService {
     required String text,
     List<String> attachmentUrls = const [],
   }) async {
-    final now = DateTime.now();
+    final nowIso = nowIsoUtc();
 
     final lastMessagePreview = text.isNotEmpty
         ? text
         : (attachmentUrls.isNotEmpty ? '📷 [Image attachment]' : '');
 
-    await _db.collection('conversations').doc(conversationId).set({
-      'participantIds': FieldValue.arrayUnion([senderId, 'admin', 'technician']),
-      'lastMessage': lastMessagePreview,
-      'lastMessageAt': now.toIso8601String(),
-      'updatedAt': now.toIso8601String(),
-    }, SetOptions(merge: true));
-
-    await _db
-        .collection('conversations')
-        .doc(conversationId)
-        .collection('messages')
-        .add({
-      'senderId': senderId,
-      'senderName': senderName,
-      'senderRole': senderRole,
-      'text': text,
-      'attachmentUrls': attachmentUrls,
-      'createdAt': now.toIso8601String(),
-    });
+    final conversation = _db.collection('conversations').doc(conversationId);
+    final batch = _db.batch()
+      ..set(conversation, {
+        'participantIds': FieldValue.arrayUnion([senderId, 'admin', 'technician']),
+        'lastMessage': lastMessagePreview,
+        'lastMessageAt': nowIso,
+        'updatedAt': nowIso,
+      }, SetOptions(merge: true))
+      ..set(conversation.collection('messages').doc(), {
+        'senderId': senderId,
+        'senderName': senderName,
+        'senderRole': senderRole,
+        'text': text,
+        'attachmentUrls': attachmentUrls,
+        'createdAt': nowIso,
+      });
+    await batch.commit();
   }
 
   // ---------------------------------------------------------------------------
   // Notifications Collection
   // ---------------------------------------------------------------------------
 
+  /// Notifications this viewer may read. The query mirrors the read rule in
+  /// firestore.rules (rules don't filter: an unfiltered query is denied outright).
+  /// Plain equality filters so the rules can check every branch.
   Stream<List<NotificationItemModel>> streamNotifications({
     String? userId,
     bool isGuest = false,
   }) {
-    if (!isFirebaseAvailable) {
-      return Stream.value(const <NotificationItemModel>[]);
-    }
+    final audience = isGuest ? 'guest' : 'users';
+    final filter = Filter.or(
+      Filter('targetGroup', isEqualTo: 'all'),
+      Filter('userId', isEqualTo: 'all'),
+      Filter('targetGroup', isEqualTo: audience),
+      Filter('userId', isEqualTo: audience),
+      !isGuest && userId != null ? Filter('userId', isEqualTo: userId) : null,
+    );
+    return _reportErrors(
+      _db.collection('notifications').where(filter).snapshots().map((snap) {
+        final list = _parseDocs(
+          snap.docs,
+          (id, data) => NotificationItemModel.fromFirestore(id, data, viewerId: isGuest ? null : userId),
+          'notification',
+        );
+        list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        return list;
+      }),
+      'notifications',
+    );
+  }
+
+  /// Adds [userId] to (or removes it from) `readBy` on each notification. Only
+  /// `readBy` is written, so a shared broadcast isn't marked read for everyone.
+  /// Guests aren't signed in and can't write; AppState keeps their read state on
+  /// the device. Errors are reported, not thrown: read state is best effort.
+  Future<void> setNotificationsRead(Iterable<String> ids, {required String userId, required bool read}) async {
+    final list = ids.toList();
+    final change = read ? FieldValue.arrayUnion([userId]) : FieldValue.arrayRemove([userId]);
     try {
-      return _db.collection('notifications').snapshots().map((snapshot) {
-        final list = <NotificationItemModel>[];
-        for (final d in snapshot.docs) {
-          try {
-            list.add(NotificationItemModel.fromFirestore(d.id, d.data()));
-          } catch (e) {
-            debugPrint('Failed to parse notification ${d.id}: $e');
-          }
+      for (var i = 0; i < list.length; i += 450) { // batches are capped at 500 writes
+        final batch = _db.batch();
+        for (final id in list.skip(i).take(450)) {
+          batch.update(_db.collection('notifications').doc(id), {'readBy': change});
         }
-        final filtered = list.where((n) {
-          final target = n.targetGroup?.toLowerCase() ?? 'all';
-          if (target == 'all') return true;
-          if (isGuest) {
-            return target == 'guest' || n.userId == 'guest';
-          } else {
-            return target == 'users' ||
-                n.userId == 'users' ||
-                (userId != null && n.userId == userId);
-          }
-        }).toList();
-
-        filtered.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-        return filtered;
-      }).handleError((Object error) {
-        debugPrint('Firestore streamNotifications error: $error');
-        return const <NotificationItemModel>[];
-      });
-    } catch (e) {
-      debugPrint('Firestore streamNotifications init error: $e');
-      return Stream.value(const <NotificationItemModel>[]);
+        await batch.commit();
+      }
+    } catch (e, stack) {
+      debugPrint('Error updating notification read state: $e');
+      _report(e, stack, 'Notification read state');
     }
   }
 
-  Future<void> markNotificationRead(String notificationId, {String? userId}) async {
-    try {
-      await _db.collection('notifications').doc(notificationId).set({
-        'isRead': true,
-        'read': true,
-        if (userId != null) 'readBy': FieldValue.arrayUnion([userId]),
-      }, SetOptions(merge: true));
-    } catch (e) {
-      debugPrint('Error marking notification read: $e');
-    }
-  }
-
+  /// Admin only (firestore.rules); fails for customers.
   Future<String> createNotification({
     required String title,
     required String message,
@@ -869,7 +781,6 @@ class FirestoreService {
     String? actionLabel,
     String? imageUrl,
   }) async {
-    final now = DateTime.now();
     final docRef = await _db.collection('notifications').add({
       'title': title,
       'message': message,
@@ -880,9 +791,8 @@ class FirestoreService {
       'actionLabel': actionLabel,
       'imageUrl': imageUrl,
       'isRead': false,
-      'createdAt': now.toIso8601String(),
+      'createdAt': nowIsoUtc(),
     });
     return docRef.id;
   }
 }
-

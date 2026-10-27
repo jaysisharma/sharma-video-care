@@ -138,7 +138,7 @@ class _TradeInScreenState extends State<TradeInScreen> {
         'photos': _photoUrls,
         'photoUrls': _photoUrls.values.toList(),
         'status': 'PENDING_PHYSICAL_INSPECTION',
-        'createdAt': DateTime.now().toIso8601String(),
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
       });
 
       if (!mounted) return;
