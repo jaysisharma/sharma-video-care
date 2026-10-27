@@ -14,9 +14,9 @@ export default function TermsPage() {
 
       <div className="card" style={{ display: "flex", flexDirection: "column", gap: "1.75rem", lineHeight: 1.7, fontSize: "0.95rem" }}>
         <section>
-          <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" }}>1. About Sharma Video Care</h2>
+          <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" }}>1. About QuickySewa</h2>
           <p>
-            Sharma Video Care is a registered technology service and electronic sales business headquartered in Janakpur, Dhanusha, Nepal. We provide specialized diagnostic electronics repairs, equipment servicing, custom installations, retail sales of new electronic goods, and certified pre-owned equipment.
+            QuickySewa is a registered technology service and electronic sales business headquartered in Janakpur, Dhanusha, Nepal. We provide specialized diagnostic electronics repairs, equipment servicing, custom installations, retail sales of new electronic goods, and certified pre-owned equipment.
           </p>
         </section>
 
@@ -40,14 +40,14 @@ export default function TermsPage() {
         <section>
           <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" }}>4. Special Orders & Product Availability</h2>
           <p>
-            All products displayed in our store are available for purchase and fulfillment. For specialized or extended delivery items, Sharma Video Care confirms inventory availability and delivery schedules directly with you before dispatch.
+            All products displayed in our store are available for purchase and fulfillment. For specialized or extended delivery items, QuickySewa confirms inventory availability and delivery schedules directly with you before dispatch.
           </p>
         </section>
 
         <section>
           <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" }}>5. Certified Second-Hand Equipment</h2>
           <p>
-            Only Sharma Video Care is authorized to list second-hand merchandise on this platform. Peer-to-peer or unauthorized third-party listings are strictly prohibited. Each pre-owned item is bench-tested by our technicians, with cosmetic condition, known marks, included accessories, and service warranty clearly disclosed.
+            Only QuickySewa is authorized to list second-hand merchandise on this platform. Peer-to-peer or unauthorized third-party listings are strictly prohibited. Each pre-owned item is bench-tested by our technicians, with cosmetic condition, known marks, included accessories, and service warranty clearly disclosed.
           </p>
         </section>
 

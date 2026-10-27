@@ -443,7 +443,7 @@ export default function ServicesPage() {
                 <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: "1.1rem", display: "flex", alignItems: "center", gap: "0.65rem" }}>
                   {item.isComingSoon ? (
                     <a
-                      href={`https://wa.me/9779854022200?text=${encodeURIComponent(`Hello Sharma Video Care, I am interested in your upcoming ${item.name} in Janakpur.`)}`}
+                      href={`https://wa.me/9779854022200?text=${encodeURIComponent(`Hello QuickySewa, I am interested in your upcoming ${item.name} in Janakpur.`)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="btn btn-primary"
@@ -557,7 +557,7 @@ export default function ServicesPage() {
               margin: "0 0 1.5rem 0",
             }}
           >
-            Sharma Video Care is onboarding verified licensed plumbers and master carpenters in Janakpurdham. Get the same transparent pricing, background-checked technicians, and warranty-backed service for your home sanitary and woodwork.
+            QuickySewa is onboarding verified licensed plumbers and master carpenters in Janakpurdham. Get the same transparent pricing, background-checked technicians, and warranty-backed service for your home sanitary and woodwork.
           </p>
 
           <div

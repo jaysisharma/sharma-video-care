@@ -1,5 +1,5 @@
 // Confirmed Business Constants & Source of Truth
-export const APP_NAME = "Sharma Video Care";
+export const APP_NAME = "QuickySewa";
 export const CORE_PROMISE = "Repair. Buy. Source. Install. Get It Done.";
 export const TAGLINE_1 = "Quality Products. Reliable Service.";
 export const TAGLINE_2 = "Fixing Cameras, Saving Memories.";
@@ -303,6 +303,11 @@ export interface OrderRecord {
     deliveredAt?: string;
   };
   notes?: string;
+  // Written only by the onOrderCreated Cloud Function.
+  inventoryApplied?: boolean;
+  priceVerified?: boolean;
+  priceIssues?: string[];
+  unverifiedItems?: string[];
   createdAt: string;
   updatedAt: string;
 }

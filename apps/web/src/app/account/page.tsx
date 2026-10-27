@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { useAuth } from "../../context/AuthContext";
+import { RequireRole } from "../../components/RequireRole";
 import {
   ServiceRequest,
   OrderRecord,
@@ -24,7 +25,9 @@ import {
   RepairsTab,
   OrdersTab,
   SourcingTab,
+  AccountSecurity,
 } from "@/components/account";
+import { useSnackbar } from "../../context/SnackbarContext";
 
 function AccountContent() {
   const searchParams = useSearchParams();
@@ -32,6 +35,7 @@ function AccountContent() {
   const highlightedId = searchParams.get("id") || "";
 
   const { user, role, firebaseUser, signOut } = useAuth();
+  const snackbar = useSnackbar();
   const [activeTab, setActiveTab] = useState(initialTab);
 
   const [repairs, setRepairs] = useState<ServiceRequest[]>([]);
@@ -40,7 +44,7 @@ function AccountContent() {
   const [quotes, setQuotes] = useState<Record<string, ServiceQuote>>({});
   const [, setLoading] = useState(true);
 
-  const customerId = user ? user.id : "cust-janakpur-01";
+  const customerId = user?.id || "";
 
   useEffect(() => {
     // Realtime listeners for customer data
@@ -133,8 +137,11 @@ function AccountContent() {
         status: accept ? "CUSTOMER_APPROVED" : "CANCELLED",
         updatedAt: new Date().toISOString(),
       });
+      if (accept) snackbar.success("Quote approved. Our technician will proceed with the repair.");
+      else snackbar.info("Quote declined. The repair request has been cancelled.");
     } catch (err) {
       console.error("Quote action failed:", err);
+      snackbar.error("Couldn't update the quote. Please try again.");
     }
   };
 
@@ -145,8 +152,13 @@ function AccountContent() {
         user={user}
         role={role}
         firebaseUser={firebaseUser}
-        signOut={signOut}
+        signOut={async () => {
+          await signOut();
+          snackbar.success("You have been signed out.");
+        }}
       />
+
+      <AccountSecurity />
 
       {/* Navigation Tabs */}
       <AccountTabs
@@ -188,7 +200,9 @@ export default function AccountPage() {
         </div>
       }
     >
-      <AccountContent />
+      <RequireRole>
+        <AccountContent />
+      </RequireRole>
     </Suspense>
   );
 }

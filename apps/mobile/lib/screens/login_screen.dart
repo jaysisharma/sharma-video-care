@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../theme_tokens.dart';
 import '../state/app_state.dart';
 import '../main.dart';
+import '../widgets/auth/auth_widgets.dart';
+import '../widgets/svc_snackbar.dart';
 import 'register_screen.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final AppState appState;
+
+  /// Tab to open when login is the root route (e.g. after signing out).
+  /// When login was pushed on top of another screen it simply pops back there.
   final int redirectIndex;
 
   const LoginScreen({
@@ -24,312 +30,162 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _passwordFocus = FocusNode();
 
-  bool _obscurePassword = true;
   bool _loading = false;
-  String? _errorMessage;
+  bool _googleLoading = false;
+  bool _appleLoading = false;
+
+  bool get _busy => _loading || _googleLoading || _appleLoading;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
-  void _navigateAfterAuth() {
-    if (mounted) {
-      if (Navigator.of(context).canPop() && widget.redirectIndex != 0) {
-        Navigator.of(context).pop();
-      } else {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (_) => MainNavigationScreen(
-              appState: widget.appState,
-              initialIndex: widget.redirectIndex,
-            ),
-          ),
-          (route) => false,
-        );
-      }
+  /// Returns to the screen that asked for login, or opens the app if login is the root.
+  void _leave({bool signedIn = false}) {
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop(signedIn);
+    } else {
+      navigator.pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => MainNavigationScreen(appState: widget.appState, initialIndex: widget.redirectIndex),
+        ),
+        (route) => false,
+      );
     }
   }
 
-  void _submit() async {
+  Future<void> _submit() async {
+    if (_busy) return;
+    FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _loading = true;
-      _errorMessage = null;
-    });
-
+    setState(() => _loading = true);
     try {
-      await widget.appState.signIn(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
-      _navigateAfterAuth();
+      await widget.appState.signIn(_emailController.text.trim(), _passwordController.text);
+      TextInput.finishAutofillContext(); // lets the OS offer to save the password
+      if (!mounted) return;
+      final firstName = widget.appState.currentUser?.name.split(' ').first ?? '';
+      SvcSnackbar.success(context, firstName.isEmpty ? tr('auth.title.login') : tr('auth.welcome', {'name': firstName}));
+      _leave(signedIn: true);
     } on FirebaseAuthException catch (e) {
-      String msg = 'Invalid email address or password. Please verify your credentials.';
-      if (e.code == 'user-not-found') {
-        msg = 'No account found with this email. Please create an account.';
-      } else if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
-        msg = 'Incorrect email or password. Please check your credentials.';
-      } else if (e.code == 'network-request-failed') {
-        msg = 'Network connection failed. Please check your internet connection.';
-      } else if (e.message != null && e.message!.isNotEmpty) {
-        msg = e.message!;
-      }
-      setState(() => _errorMessage = msg);
+      if (mounted) SvcSnackbar.error(context, authErrorMessage(e.code, customMessage: e.message));
+    } on FirebaseException catch (e) {
+      final msg = (e.message != null && e.message!.isNotEmpty)
+          ? '${e.code}: ${e.message}'
+          : tr('auth.err.generic');
+      if (mounted) SvcSnackbar.error(context, msg);
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-      });
+      debugPrint('Sign in failed: $e');
+      final errStr = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+      if (mounted) SvcSnackbar.error(context, errStr.isNotEmpty ? errStr : tr('auth.err.generic'));
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
+  Future<void> _google() async {
+    if (_busy) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _googleLoading = true);
+    final signedIn = await runGoogleSignIn(context, widget.appState);
+    if (!mounted) return;
+    setState(() => _googleLoading = false);
+    if (signedIn) _leave(signedIn: true);
+  }
+
+  Future<void> _apple() async {
+    if (_busy) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _appleLoading = true);
+    final signedIn = await runAppleSignIn(context, widget.appState);
+    if (!mounted) return;
+    setState(() => _appleLoading = false);
+    if (signedIn) _leave(signedIn: true);
+  }
+
+  Future<void> _openRegister() async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => RegisterScreen(appState: widget.appState, openedFromLogin: true)),
+    );
+    if (created == true) _leave(signedIn: true);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sign In', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-        backgroundColor: SvcColors.surface,
-        elevation: 0.5,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Brand Icon & Heading
-            Center(
+    return AuthScaffold(
+      titleKey: 'auth.title.login',
+      subtitleKey: 'auth.subtitle.login',
+      bodyBuilder: (context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AutofillGroup(
+            child: Form(
+              key: _formKey,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: SvcColors.primary,
-                      borderRadius: BorderRadius.circular(6), // Clean subtle radius, NOT pill chips
+                  AuthTextField(
+                    label: tr('auth.email'),
+                    controller: _emailController,
+                    hint: 'name@example.com',
+                    keyboardType: TextInputType.emailAddress,
+                    autofillHints: const [AutofillHints.email, AutofillHints.username],
+                    autocorrect: false,
+                    validator: validateEmail,
+                    onSubmitted: (_) => _passwordFocus.requestFocus(),
+                  ),
+                  const SizedBox(height: 14),
+                  AuthPasswordField(
+                    label: tr('auth.password'),
+                    controller: _passwordController,
+                    focusNode: _passwordFocus,
+                    validator: (v) => (v == null || v.isEmpty) ? tr('auth.err.passwordRequired') : null,
+                    onSubmitted: (_) => _submit(),
+                    labelAside: AuthLinkButton(
+                      label: tr('auth.forgot'),
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: SvcColors.inkSecondary,
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => ForgotPasswordScreen(appState: widget.appState)),
+                      ),
                     ),
-                    alignment: Alignment.center,
-                    child: const Text(
-                      'S',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 24),
-                    ),
                   ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Sharma Video Care',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: SvcColors.ink),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Sign in to track repairs and manage equipment orders.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, color: SvcColors.muted),
-                  ),
+                  const SizedBox(height: 22),
+                  AuthPrimaryButton(label: tr('auth.signIn'), loading: _loading, onPressed: _busy ? null : _submit),
                 ],
               ),
             ),
-            const SizedBox(height: 28),
-
-            // Error banner if any
-            if (_errorMessage != null)
-              Container(
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFDF0F0),
-                  border: Border.all(color: SvcColors.danger),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: SvcColors.danger, size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _errorMessage!,
-                        style: const TextStyle(color: SvcColors.danger, fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            // Form Card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: SvcColors.surface,
-                border: Border.all(color: SvcColors.border),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Email Address',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: SvcColors.ink),
-                    ),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: InputDecoration(
-                        hintText: 'name@example.com',
-                        prefixIcon: const Icon(Icons.email_outlined, size: 20, color: SvcColors.muted),
-                        filled: true,
-                        fillColor: SvcColors.canvas,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide: const BorderSide(color: SvcColors.border),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide: const BorderSide(color: SvcColors.border),
-                        ),
-                      ),
-                      validator: (val) {
-                        if (val == null || val.trim().isEmpty) return 'Please enter your email';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Password',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: SvcColors.ink),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => ForgotPasswordScreen(appState: widget.appState),
-                              ),
-                            );
-                          },
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: const Text(
-                            'Forgot password?',
-                            style: TextStyle(fontSize: 12, color: SvcColors.primary, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        hintText: '••••••••',
-                        prefixIcon: const Icon(Icons.lock_outline, size: 20, color: SvcColors.muted),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                            size: 20,
-                            color: SvcColors.muted,
-                          ),
-                          onPressed: () {
-                            setState(() => _obscurePassword = !_obscurePassword);
-                          },
-                        ),
-                        filled: true,
-                        fillColor: SvcColors.canvas,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide: const BorderSide(color: SvcColors.border),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide: const BorderSide(color: SvcColors.border),
-                        ),
-                      ),
-                      validator: (val) {
-                        if (val == null || val.trim().isEmpty) return 'Please enter your password';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 22),
-
-                    ElevatedButton(
-                      onPressed: _loading ? null : _submit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: SvcColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        elevation: 0,
-                      ),
-                      child: _loading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                            )
-                          : const Text('Sign In', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-
-            // Register option
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text("Don't have an account? ", style: TextStyle(color: SvcColors.muted, fontSize: 13)),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => RegisterScreen(appState: widget.appState),
-                      ),
-                    );
-                  },
-                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
-                  child: const Text(
-                    'Create Account',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: SvcColors.primary, fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
+          ),
+          const AuthOrDivider(),
+          if (appleSignInAvailable) ...[
+            AppleSignInButton(onPressed: _busy ? null : _apple, loading: _appleLoading),
             const SizedBox(height: 10),
-            Center(
-              child: TextButton(
-                onPressed: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => MainNavigationScreen(appState: widget.appState),
-                    ),
-                  );
-                },
-                child: const Text(
-                  'Skip for now • Explore as Guest →',
-                  style: TextStyle(color: SvcColors.muted, fontSize: 13),
-                ),
-              ),
-            ),
           ],
-        ),
+          GoogleSignInButton(onPressed: _busy ? null : _google, loading: _googleLoading),
+          const SizedBox(height: 8),
+          Center(
+            child: AuthLinkButton(
+              label: tr('auth.guestButton'),
+              onPressed: _busy ? null : _leave,
+              color: SvcColors.inkSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+      footerBuilder: (context) => AuthSwitchPrompt(
+        prompt: tr('auth.noAccount'),
+        linkLabel: tr('auth.createAccount'),
+        onPressed: _openRegister,
       ),
     );
   }

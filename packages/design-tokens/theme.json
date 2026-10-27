@@ -17,7 +17,8 @@
     "fontFamily": "Inter",
     "headingWeight": 700,
     "bodyWeight": 400,
-    "buttonWeight": 600
+    "buttonWeight": 600,
+    "fontHeading": "Inter Tight"
   },
   "shape": {
     "radiusSm": 8,

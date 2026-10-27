@@ -2,250 +2,585 @@ import 'package:flutter/material.dart';
 import '../theme_tokens.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
-
 import '../services/firestore_service.dart';
+import '../widgets/delivery_hub_sheet.dart';
+import '../widgets/used_product_cards.dart';
+import '../widgets/used_filter_sheet.dart';
+import '../widgets/used_inspection_sheets.dart';
+import '../widgets/store_product_widgets.dart';
+import '../data/used_products_data.dart';
+import 'notifications_screen.dart';
+import 'cart_screen.dart';
+import 'trade_in_screen.dart';
+import 'source_screen.dart';
 
-class UsedProductsScreen extends StatelessWidget {
+class UsedProductsScreen extends StatefulWidget {
   final AppState appState;
 
   const UsedProductsScreen({super.key, required this.appState});
 
   @override
+  State<UsedProductsScreen> createState() => _UsedProductsScreenState();
+}
+
+class _UsedProductsScreenState extends State<UsedProductsScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  late final Stream<List<UsedProductModel>> _usedProductsStream;
+  String _selectedCategory = 'All';
+  String _selectedGrade = 'All';
+  String _sortBy = 'Featured';
+
+  @override
+  void initState() {
+    super.initState();
+    try {
+      _usedProductsStream = FirestoreService().streamUsedProducts();
+    } catch (e) {
+      debugPrint('UsedProductsScreen stream error: $e');
+      _usedProductsStream = Stream.value(const <UsedProductModel>[]);
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  int get _activeFilterCount {
+    int count = 0;
+    if (_selectedCategory != 'All') count++;
+    if (_selectedGrade != 'All') count++;
+    if (_sortBy != 'Featured') count++;
+    return count;
+  }
+
+  void _openFilterSheet() {
+    UsedFilterSheet.show(
+      context: context,
+      currentCategory: _selectedCategory,
+      currentGrade: _selectedGrade,
+      currentSortBy: _sortBy,
+      onApply: (cat, gr, sort) {
+        setState(() {
+          _selectedCategory = cat;
+          _selectedGrade = gr;
+          _sortBy = sort;
+        });
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: SvcColors.canvas,
       appBar: AppBar(
-        title: const Text('Certified Second-Hand Gear'),
-        backgroundColor: SvcColors.surface,
-        elevation: 0.5,
-      ),
-      body: StreamBuilder<List<UsedProductModel>>(
-        stream: FirestoreService().streamUsedProducts(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
-
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline, size: 40, color: SvcColors.danger),
-                    const SizedBox(height: 12),
-                    const Text('Error loading certified pre-owned gear', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text('${snapshot.error}', style: const TextStyle(fontSize: 12, color: SvcColors.muted)),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          final items = snapshot.data ?? [];
-
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // Exclusive SVC policy notice
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5FAF7),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFD1EADE)),
-                ),
-                child: const Row(
+        titleSpacing: 14,
+        title: InkWell(
+          onTap: () => showDeliveryHubSheet(context, widget.appState),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.location_on_rounded, color: SvcColors.primary, size: 20),
+                const SizedBox(width: 6),
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.verified, color: SvcColors.success, size: 20),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Exclusively Sharma Video Care Pre-Owned: No peer-to-peer listings. Every unit is inspected in our lab and backed by our service warranty.',
-                        style: TextStyle(fontSize: 12, color: Color(0xFF165935), height: 1.3),
+                    const Text(
+                      'Delivering to',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: SvcColors.muted,
                       ),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          widget.appState.selectedDeliveryHub,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                            color: SvcColors.ink,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        const Icon(Icons.keyboard_arrow_down_rounded, color: SvcColors.ink, size: 18),
+                      ],
                     ),
                   ],
                 ),
+              ],
+            ),
+          ),
+        ),
+        backgroundColor: SvcColors.surface,
+        elevation: 0.5,
+        actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.notifications_none_rounded, color: SvcColors.ink),
+                if (widget.appState.unreadNotificationCount > 0)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(
+                        color: SvcColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '${widget.appState.unreadNotificationCount}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => NotificationsScreen(appState: widget.appState),
               ),
-              const SizedBox(height: 16),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Cart',
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.shopping_cart_outlined, color: SvcColors.ink),
+                if (widget.appState.cartCount > 0)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(
+                        color: SvcColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '${widget.appState.cartCount}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CartScreen(appState: widget.appState),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+      body: StreamBuilder<List<UsedProductModel>>(
+        stream: _usedProductsStream,
+        builder: (context, snapshot) {
+          final allItems = snapshot.data ?? const <UsedProductModel>[];
 
-              if (items.isEmpty)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 48.0, horizontal: 24.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 64,
-                          height: 64,
-                          decoration: BoxDecoration(
-                            color: SvcColors.canvas,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: SvcColors.border),
+          final query = _searchController.text.toLowerCase().trim();
+          final filtered = allItems.where((item) {
+            final matchesQuery = query.isEmpty ||
+                item.name.toLowerCase().contains(query) ||
+                item.brand.toLowerCase().contains(query) ||
+                (item.model?.toLowerCase().contains(query) ?? false);
+
+            final matchesCategory = _selectedCategory == 'All' ||
+                item.categoryName.toLowerCase() == _selectedCategory.toLowerCase();
+
+            final matchesGrade = _selectedGrade == 'All' ||
+                item.conditionGrade.toUpperCase() == _selectedGrade.toUpperCase();
+
+            return matchesQuery && matchesCategory && matchesGrade;
+          }).toList();
+
+          if (_sortBy == 'Price: Low to High') {
+            filtered.sort((a, b) => a.price.compareTo(b.price));
+          } else if (_sortBy == 'Price: High to Low') {
+            filtered.sort((a, b) => b.price.compareTo(a.price));
+          }
+
+          return CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              // 1. Sleek Search Bar with Integrated Filter & Trade-In Buttons
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                  child: Row(
+                    children: [
+                      // Search Input
+                      Expanded(
+                        child: SizedBox(
+                          height: 42,
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (_) => setState(() {}),
+                            decoration: InputDecoration(
+                              hintText: 'Search pre-owned gear...',
+                              hintStyle: const TextStyle(fontSize: 13, color: SvcColors.muted),
+                              prefixIcon: const Icon(Icons.search, size: 18, color: SvcColors.muted),
+                              suffixIcon: _searchController.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 16, color: SvcColors.muted),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() {});
+                                      },
+                                    )
+                                  : null,
+                              filled: true,
+                              fillColor: SvcColors.surface,
+                              contentPadding: EdgeInsets.zero,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: SvcColors.border),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: SvcColors.border),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: SvcColors.primary, width: 1.5),
+                              ),
+                            ),
                           ),
-                          child: const Icon(Icons.verified_outlined, size: 28, color: SvcColors.muted),
                         ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'No Certified Used Units in Stock',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: SvcColors.ink),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Dedicated Filter Button
+                      InkWell(
+                        onTap: _openFilterSheet,
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          height: 42,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: _activeFilterCount > 0 ? const Color(0xFF0F172A) : SvcColors.surface,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _activeFilterCount > 0 ? const Color(0xFF0F172A) : SvcColors.border,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.tune_rounded,
+                                size: 17,
+                                color: _activeFilterCount > 0 ? Colors.white : SvcColors.ink,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Filter',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: _activeFilterCount > 0 ? Colors.white : SvcColors.ink,
+                                ),
+                              ),
+                              if (_activeFilterCount > 0) ...[
+                                const SizedBox(width: 5),
+                                Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: SvcColors.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '$_activeFilterCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'All pre-owned cameras and drones undergo strict multi-point bench tests before being listed here. Check back soon or request custom sourcing.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 13, color: SvcColors.muted),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // 2. Streamlined Category Filter Bar with Grid/List Toggle
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                  child: Row(
+                    children: [
+                      // Horizontal Categories
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          child: Row(
+                            children: kUsedCategories.map((cat) {
+                              final isSelected = cat == _selectedCategory;
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: InkWell(
+                                  onTap: () => setState(() => _selectedCategory = cat),
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: isSelected ? SvcColors.primary : SvcColors.surface,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: isSelected ? SvcColors.primary : SvcColors.border,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      cat,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                        color: isSelected ? Colors.white : SvcColors.ink,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // 3. Active Filter Badges (Only displayed when specific filters are set)
+              if (_selectedGrade != 'All' || _sortBy != 'Featured')
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        if (_selectedGrade != 'All')
+                          Chip(
+                            label: Text(
+                              'Grade: ${_selectedGrade.replaceAll('_', ' ')}',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            deleteIcon: const Icon(Icons.close, size: 14),
+                            onDeleted: () => setState(() => _selectedGrade = 'All'),
+                            backgroundColor: const Color(0xFFF1F5F9),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        if (_sortBy != 'Featured')
+                          Chip(
+                            label: Text(
+                              'Sort: $_sortBy',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            deleteIcon: const Icon(Icons.close, size: 14),
+                            onDeleted: () => setState(() => _sortBy = 'Featured'),
+                            backgroundColor: const Color(0xFFF1F5F9),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              // 4. Compact Trade-In & Inspection Trust Strip
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 2, 14, 10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: SvcColors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.verified, size: 14, color: SvcColors.primary),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => showInspectionStandardsSheet(context),
+                            child: const Text(
+                              'Lab Inspected • 90-Day Gold Warranty',
+                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: SvcColors.ink),
+                            ),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => TradeInScreen(appState: widget.appState),
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            'Sell / Trade-In →',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF047857),
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
+                ),
+              ),
+
+              // 5. Product Grid / List
+              if (snapshot.hasError)
+                SliverToBoxAdapter(
+                  child: StoreFeedMessage.loadError(isNe: false, what: 'pre-owned gear'),
                 )
-              else
-                ...items.map(
-                  (item) => Card(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    color: SvcColors.surface,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: const BorderSide(color: SvcColors.border),
+              else if (!snapshot.hasData)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 48),
+                    child: Center(
+                      child: CircularProgressIndicator(strokeWidth: 2.4, color: SvcColors.primary),
                     ),
-                    elevation: 0,
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
+                  ),
+                )
+              else if (allItems.isEmpty)
+                SliverToBoxAdapter(
+                  child: StoreFeedMessage(
+                    icon: Icons.inventory_2_outlined,
+                    title: 'No pre-owned gear listed right now',
+                    subtitle: 'New inspected listings are added often. You can also trade in your gear or ask us to source something.',
+                    actionLabel: 'Trade In Your Gear',
+                    onAction: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => TradeInScreen(appState: widget.appState)),
+                    ),
+                  ),
+                )
+              else if (filtered.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 48),
+                    child: Center(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 84,
-                                height: 84,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF2EDE4),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: item.imageUrl != null && item.imageUrl!.isNotEmpty
-                                    ? ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Image.network(
-                                          item.imageUrl!,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => const Icon(Icons.camera_alt, color: SvcColors.muted),
-                                        ),
-                                      )
-                                    : const Icon(Icons.camera_alt, color: SvcColors.muted),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: SvcColors.primarySoft,
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            'Grade: ${item.conditionGrade.replaceAll('_', ' ')}',
-                                            style: const TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                              color: SvcColors.primaryDark,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        const Icon(Icons.check_circle, size: 14, color: SvcColors.success),
-                                        const Text(' Tested', style: TextStyle(fontSize: 11, color: SvcColors.success)),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      item.name,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Rs. ${item.price.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
-                                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: SvcColors.ink),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                          const Icon(Icons.filter_list_off_rounded, size: 36, color: SvcColors.muted),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'No gear matching filters',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: SvcColors.ink),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Try resetting your filters or custom sourcing',
+                            style: TextStyle(color: SvcColors.muted, fontSize: 12),
                           ),
                           const SizedBox(height: 12),
-
-                          Text(
-                            item.conditionDescription,
-                            style: const TextStyle(fontSize: 12, color: SvcColors.muted),
-                          ),
-                          if (item.knownDefects.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFEF9EF),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: const Color(0xFFF8ECCF)),
-                              ),
-                              child: Text(
-                                'Disclosed Mark: ${item.knownDefects[0]}',
-                                style: const TextStyle(fontSize: 11, color: Color(0xFF8E5A17)),
-                              ),
+                          OutlinedButton(
+                            onPressed: () {
+                              setState(() {
+                                _searchController.clear();
+                                _selectedCategory = 'All';
+                                _selectedGrade = 'All';
+                                _sortBy = 'Featured';
+                              });
+                            },
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: SvcColors.border),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                          ],
-                          const SizedBox(height: 12),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                '🛡️ ${item.warrantyDetails}',
-                                style: const TextStyle(fontSize: 11, color: SvcColors.muted),
-                              ),
-                              ElevatedButton.icon(
-                                onPressed: () {
-                                  appState.addToCart(CartItemModel(
-                                    productId: item.id,
-                                    productType: 'USED',
-                                    name: item.name,
-                                    unitPrice: item.price,
-                                    imageUrl: item.imageUrl,
-                                  ));
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      duration: const Duration(seconds: 1),
-                                      content: Text('Added "${item.name}" to cart!'),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.add_shopping_cart, size: 14),
-                                label: const Text('Add to Cart', style: TextStyle(fontSize: 12)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: SvcColors.primary,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                  minimumSize: Size.zero,
-                                ),
-                              ),
-                            ],
+                            child: const Text('Reset All Filters'),
                           ),
                         ],
                       ),
                     ),
                   ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  sliver: SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      mainAxisExtent: UsedProductCard.extentFor(
+                        (MediaQuery.sizeOf(context).width - 28 - 12) / 2,
+                        MediaQuery.textScalerOf(context),
+                      ),
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => UsedProductCard(
+                        item: filtered[index],
+                        appState: widget.appState,
+                      ),
+                      childCount: filtered.length,
+                    ),
+                  ),
                 ),
+
+              // 6. Minimal Sourcing link
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Center(
+                    child: TextButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SourceRequestScreen(appState: widget.appState),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.search, size: 14, color: SvcColors.muted),
+                      label: const Text(
+                        "Can't find your gear? Request Custom Sourcing →",
+                        style: TextStyle(fontSize: 11.5, color: SvcColors.muted, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           );
         },

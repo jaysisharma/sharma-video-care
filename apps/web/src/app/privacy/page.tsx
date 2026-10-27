@@ -14,7 +14,7 @@ export default function PrivacyPage() {
         <section>
           <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" }}>1. Information We Collect</h2>
           <p>
-            Sharma Video Care collects personal information required solely for delivering services and fulfilling orders:
+            QuickySewa collects personal information required solely for delivering services and fulfilling orders:
           </p>
           <ul style={{ paddingLeft: "1.25rem", marginTop: "0.5rem" }}>
             <li>Contact details: Name, phone number, email address.</li>

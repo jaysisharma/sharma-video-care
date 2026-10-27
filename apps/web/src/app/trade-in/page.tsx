@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { TradeInCalculator } from "@/components/tradein/TradeInCalculator";
 
 export const metadata: Metadata = {
-  title: "Sell Old Gear & Instant Trade-In Valuation Calculator | Sharma Video Care",
+  title: "Sell Old Gear & Instant Trade-In Valuation Calculator | QuickySewa",
   description:
     "Get an instant cash buyout or +10% store credit valuation for your DSLR cameras, mirrorless bodies, optical lenses, laptops, drones, and smartphones. Counter drop-off in Janakpurdham or insured courier pickup across Nepal.",
   keywords: [
@@ -11,12 +11,12 @@ export const metadata: Metadata = {
     "Used camera valuation Nepal",
     "Sell DSLR Kathmandu Janakpur",
     "Exchange old camera for new",
-    "Sharma Video Care trade-in",
+    "QuickySewa trade-in",
     "Sell DJI drone Nepal",
     "Camera shutter count valuation",
   ],
   openGraph: {
-    title: "Sell Old Gear & Trade-In Valuation Calculator | Sharma Video Care",
+    title: "Sell Old Gear & Trade-In Valuation Calculator | QuickySewa",
     description:
       "Instant cash buyout or +10% store credit upgrade for your cameras, lenses, laptops, and drones. Physical bench inspection at Station Road, Janakpur or insured pickup across Nepal.",
     type: "website",

@@ -3,6 +3,7 @@ import '../theme_tokens.dart';
 import '../state/app_state.dart';
 
 import '../services/firestore_service.dart';
+import '../widgets/svc_snackbar.dart';
 
 class SourceRequestScreen extends StatefulWidget {
   final AppState appState;
@@ -42,7 +43,7 @@ class _SourceRequestScreenState extends State<SourceRequestScreen> {
 
     try {
       final user = widget.appState.currentUser;
-      final customerId = user?.id ?? 'guest-${DateTime.now().millisecondsSinceEpoch}';
+      final customerId = user?.id ?? FirestoreService.newGuestId();
       final customerName = user?.name ?? 'Guest User';
       final customerPhone = user?.phone ?? '';
 
@@ -102,9 +103,7 @@ class _SourceRequestScreenState extends State<SourceRequestScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: SvcColors.danger, content: Text('Error creating request: $e')),
-      );
+      SvcSnackbar.show(context, 'Couldn\'t submit your request. Please try again.', type: SnackType.error);
     }
   }
 

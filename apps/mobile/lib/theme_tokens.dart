@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Commercial-grade design tokens for Sharma Video Care.
+/// Commercial-grade design tokens for QuickySewa.
 /// Uses crisp neutral surfaces, tailored slate hierarchy, and optics brand orange.
 class SvcColors {
   static const primary = Color(0xFFE86F1C);
   static const primaryDark = Color(0xFFC2570D);
-  static const primarySoft = Color(0xFFFFF7ED);
-  static const primaryBorder = Color(0xFFFFEDD5);
+  // Peach tints of the brand orange (backgrounds, chips, focus glow, accents on dark).
+  static const primarySoft = Color(0xFFFFF7ED); // Peach 50
+  static const primaryBorder = Color(0xFFFFEDD5); // Peach 100
+  static const peach200 = Color(0xFFFED7AA);
+  static const peach300 = Color(0xFFFDBA74);
+  // Warm near-black used by the homepage hero.
+  static const heroDark = Color(0xFF19120D);
 
   // Modern 3-tier ink system (Slate palette)
   static const ink = Color(0xFF0F172A); // Slate 900 - Primary readable text
@@ -21,13 +26,16 @@ class SvcColors {
 
   // Refined borders
   static const border = Color(0xFFE2E8F0); // Slate 200 - Clean structural borders
+  static const borderStrong = Color(0xFFCBD5E1); // Slate 300 - Inputs, outlined buttons
   static const borderSubtle = Color(0xFFF1F5F9); // Slate 100 - Divider lines
 
   // Semantic status colors
   static const success = Color(0xFF16A34A);
   static const warning = Color(0xFFD97706);
   static const danger = Color(0xFFDC2626);
+  static const error = Color(0xFFDC2626);
   static const info = Color(0xFF2563EB);
+  static const inkSecondary = Color(0xFF475569);
 }
 
 class SvcShadows {

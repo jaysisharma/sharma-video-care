@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { UserRole, TechnicianType, UserProfile } from "@sharmavideocare/shared";
 import {
   signInWithEmailAndPassword,
@@ -9,63 +9,39 @@ import {
   sendPasswordResetEmail,
   onAuthStateChanged,
   updateProfile as fbUpdateProfile,
-  signInAnonymously,
+  sendEmailVerification,
+  setPersistence,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  deleteUser,
+  browserLocalPersistence,
+  browserSessionPersistence,
   User as FirebaseUser,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 
-export interface DemoPersona {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  role: UserRole;
-  technicianType?: TechnicianType;
-  label: string;
-  defaultPassword?: string;
+// Profile fields a user may edit on their own document (mirrors firestore.rules).
+const SELF_EDITABLE_FIELDS = ["name", "phone", "photoUrl"] as const;
+
+export const ADMIN_EMAILS = [
+  "jaysisharma@gmail.com",
+  "admin@sharmavideocare.com",
+  "admin@video.care",
+];
+
+export function isAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return ADMIN_EMAILS.includes(email.trim().toLowerCase());
 }
 
-export const DEMO_PERSONAS: DemoPersona[] = [
-  {
-    id: "cust-janakpur-01",
-    name: "Ramesh Sah",
-    email: "ramesh@example.com",
-    phone: "+977-9801234567",
-    role: "customer",
-    label: "Customer (Ramesh - Janakpur)",
-    defaultPassword: "Customer123!",
-  },
-  {
-    id: "admin-svc-01",
-    name: "Sharma Admin",
-    email: "admin@sharmavideocare.com",
-    phone: "+977-9851000000",
-    role: "admin",
-    label: "Admin (Operations & Dispatch)",
-    defaultPassword: "Admin123!",
-  },
-  {
-    id: "tech-svc-int-01",
-    name: "Bikash Sharma",
-    email: "bikash.tech@sharmavideocare.com",
-    phone: "+977-9844001122",
-    role: "technician",
-    technicianType: "INTERNAL",
-    label: "Internal Tech (Bikash - Janakpur)",
-    defaultPassword: "Technician123!",
-  },
-  {
-    id: "tech-svc-ext-01",
-    name: "Sunil Mandal",
-    email: "sunil.mandal@example.com",
-    phone: "+977-9812334455",
-    role: "technician",
-    technicianType: "EXTERNAL",
-    label: "External Tech (Sunil - Appliances)",
-    defaultPassword: "Technician123!",
-  },
-];
+/**
+ * Admin UI by email only for verified addresses; otherwise anyone could register an
+ * unclaimed address from the list. Data access is still decided by firestore.rules.
+ */
+function isTrustedAdmin(fbUser: FirebaseUser): boolean {
+  return fbUser.emailVerified && isAdminEmail(fbUser.email);
+}
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -73,13 +49,13 @@ interface AuthContextType {
   role: UserRole;
   technicianType?: TechnicianType;
   isLoading: boolean;
-  activePersonaId: string;
-  signIn: (email: string, pass: string) => Promise<void>;
+  signIn: (email: string, pass: string, remember?: boolean) => Promise<UserProfile | null>;
   signUp: (name: string, email: string, phone: string, pass: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  switchPersona: (personaId: string) => Promise<void>;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
+  resendVerificationEmail: () => Promise<void>;
+  deleteAccount: (currentPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -87,219 +63,175 @@ const AuthContext = createContext<AuthContextType>({
   firebaseUser: null,
   role: "customer",
   isLoading: true,
-  activePersonaId: DEMO_PERSONAS[0].id,
-  signIn: async () => {},
+  signIn: async () => null,
   signUp: async () => {},
   signOut: async () => {},
   resetPassword: async () => {},
-  switchPersona: async () => {},
   updateProfile: async () => {},
+  resendVerificationEmail: async () => {},
+  deleteAccount: async () => {},
 });
+
+/** Rejects absolute / protocol-relative URLs so `?redirect=` cannot send users off-site. */
+export function safeRedirectPath(target: string | null | undefined): string | null {
+  if (!target) return null;
+  if (!target.startsWith("/") || target.startsWith("//") || target.startsWith("/\\")) return null;
+  return target;
+}
+
+export function homePathForRole(role: UserRole | undefined, email?: string | null): string {
+  if (role === "admin" || isAdminEmail(email)) return "/admin";
+  if (role === "technician") return "/technician";
+  return "/account";
+}
+
+function newCustomerProfile(fbUser: FirebaseUser, name?: string, phone?: string): UserProfile {
+  const now = new Date().toISOString();
+  return {
+    id: fbUser.uid,
+    name: (name || fbUser.displayName || fbUser.email?.split("@")[0] || "Customer").trim(),
+    email: fbUser.email || "",
+    phone: phone?.trim() || "",
+    role: "customer",
+    status: "ACTIVE",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [activePersonaId, setActivePersonaId] = useState<string>(DEMO_PERSONAS[0].id);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  // While signUp() is writing the full profile, the auth listener must not create a partial one.
+  const signingUpRef = useRef(false);
 
-  // Subscribe to real Firebase Auth state changes
   useEffect(() => {
     let unsubscribeUserDoc: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
+      unsubscribeUserDoc?.();
+      unsubscribeUserDoc = null;
       setFirebaseUser(fbUser);
 
-      if (fbUser) {
-        try {
-          const userDocRef = doc(db, "users", fbUser.uid);
-          const snap = await getDoc(userDocRef);
-
-          if (snap.exists()) {
-            const data = snap.data() as UserProfile;
-            setUser(data);
-          } else {
-            // Check if this matches a persona email or is a fresh registered user
-            const matchedPersona = DEMO_PERSONAS.find((p) => p.email.toLowerCase() === fbUser.email?.toLowerCase());
-            const newProfile: UserProfile = {
-              id: fbUser.uid,
-              name: fbUser.displayName || matchedPersona?.name || fbUser.email?.split("@")[0] || "Customer",
-              email: fbUser.email || "",
-              phone: matchedPersona?.phone || "+977-9800000000",
-              role: matchedPersona?.role || "customer",
-              technicianType: matchedPersona?.technicianType,
-              status: "ACTIVE",
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            };
-
-            await setDoc(userDocRef, newProfile);
-            setUser(newProfile);
-          }
-
-          // Realtime listener for profile updates
-          unsubscribeUserDoc = onSnapshot(userDocRef, (s) => {
-            if (s.exists()) {
-              setUser(s.data() as UserProfile);
-            }
-          });
-        } catch (err) {
-          console.error("Firestore user profile sync error:", err);
-          // Fallback user representation from Firebase Auth user
-          setUser({
-            id: fbUser.uid,
-            name: fbUser.displayName || fbUser.email?.split("@")[0] || "User",
-            email: fbUser.email || "",
-            phone: "+977-9800000000",
-            role: "customer",
-            status: "ACTIVE",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
-        } finally {
-          setIsLoading(false);
-        }
-      } else {
-        // Not signed in: User is guest / unauthenticated
+      if (!fbUser || fbUser.isAnonymous) {
         setUser(null);
         setIsLoading(false);
+        return;
       }
+
+      setIsLoading(true);
+      const userDocRef = doc(db, "users", fbUser.uid);
+
+      try {
+        if (!signingUpRef.current) {
+          const snap = await getDoc(userDocRef);
+          if (!snap.exists()) {
+            // Accounts created outside signUp() (e.g. console) get a customer profile.
+            // Roles are only ever granted by an admin; firestore.rules enforce this.
+            await setDoc(userDocRef, newCustomerProfile(fbUser));
+          }
+        }
+      } catch (err) {
+        console.error("Firestore user profile sync error:", err);
+      }
+
+      unsubscribeUserDoc = onSnapshot(
+        userDocRef,
+        (s) => {
+          const isAdmin = isTrustedAdmin(fbUser);
+          if (s.exists()) {
+            const data = s.data() as UserProfile;
+            setUser({ ...(s.data() as UserProfile), id: fbUser.uid, role: isAdmin ? "admin" : data.role });
+            setIsLoading(false);
+          } else if (!signingUpRef.current) {
+            const profile = newCustomerProfile(fbUser);
+            if (isAdmin) profile.role = "admin";
+            setUser(profile);
+            setIsLoading(false);
+          }
+        },
+        (err) => {
+          console.error("User profile listener error:", err);
+          const profile = newCustomerProfile(fbUser);
+          if (isTrustedAdmin(fbUser)) profile.role = "admin";
+          setUser(profile);
+          setIsLoading(false);
+        }
+      );
     });
 
     return () => {
       unsubscribeAuth();
-      if (unsubscribeUserDoc) unsubscribeUserDoc();
+      unsubscribeUserDoc?.();
     };
-  }, [activePersonaId]);
+  }, []);
 
-  // Sign In with email & password
-  const signIn = async (email: string, pass: string) => {
-    setIsLoading(true);
-    try {
-      await signInWithEmailAndPassword(auth, email.trim(), pass);
-    } finally {
-      setIsLoading(false);
+  const signIn = async (email: string, pass: string, remember = true) => {
+    await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
+    const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
+
+    const snap = await getDoc(doc(db, "users", cred.user.uid)).catch(() => null);
+    const profile = snap?.exists() ? (snap.data() as UserProfile) : null;
+
+    if (profile && profile.status !== "ACTIVE") {
+      await fbSignOut(auth);
+      throw Object.assign(new Error("This account has been deactivated."), { code: "auth/user-disabled" });
     }
+    return profile;
   };
 
-  // Create new customer account
   const signUp = async (name: string, email: string, phone: string, pass: string) => {
-    setIsLoading(true);
+    signingUpRef.current = true;
     try {
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
-      const uid = cred.user.uid;
-
-      if (name) {
-        await fbUpdateProfile(cred.user, { displayName: name });
-      }
-
-      const profile: UserProfile = {
-        id: uid,
-        name: name.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        role: "customer",
-        status: "ACTIVE",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      await setDoc(doc(db, "users", uid), profile);
+      await fbUpdateProfile(cred.user, { displayName: name.trim() });
+      const profile = newCustomerProfile(cred.user, name, phone);
+      await setDoc(doc(db, "users", cred.user.uid), profile);
       setUser(profile);
-    } finally {
       setIsLoading(false);
+      sendEmailVerification(cred.user).catch((err) => console.warn("Verification email failed:", err));
+    } finally {
+      signingUpRef.current = false;
     }
   };
 
-  // Sign out
   const signOut = async () => {
-    setIsLoading(true);
-    try {
-      await fbSignOut(auth);
-      setActivePersonaId("");
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
+    await fbSignOut(auth);
+    setUser(null);
   };
 
-  // Password reset
   const resetPassword = async (email: string) => {
     await sendPasswordResetEmail(auth, email.trim());
   };
 
-  // Seamless Demo Persona Switcher (signs into real Firebase Auth if credentials exist or sets persona)
-  const switchPersona = async (personaId: string) => {
-    setActivePersonaId(personaId);
-    const target = DEMO_PERSONAS.find((p) => p.id === personaId) || DEMO_PERSONAS[0];
-
-    try {
-      if (target.email && target.defaultPassword) {
-        try {
-          await signInWithEmailAndPassword(auth, target.email, target.defaultPassword);
-          return;
-        } catch (loginErr: any) {
-          if (loginErr.code === "auth/user-not-found" || loginErr.code === "auth/invalid-credential") {
-            try {
-              // Attempt to auto-create test user
-              const cred = await createUserWithEmailAndPassword(auth, target.email, target.defaultPassword);
-              await fbUpdateProfile(cred.user, { displayName: target.name });
-              await setDoc(doc(db, "users", cred.user.uid), {
-                id: cred.user.uid,
-                name: target.name,
-                email: target.email,
-                phone: target.phone,
-                role: target.role,
-                technicianType: target.technicianType,
-                status: "ACTIVE",
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-              });
-              return;
-            } catch (createErr) {
-              // If email/password creation is restricted, fallback to anonymous sign-in
-            }
-          }
-        }
-      }
-
-      // Anonymous sign-in fallback so request.auth != null
-      if (!auth.currentUser) {
-        try {
-          await signInAnonymously(auth);
-        } catch {
-          // Fallback silently if anonymous auth disabled
-        }
-      }
-    } catch (e) {
-      console.warn("Persona auth switch:", e);
+  const updateProfile = async (data: Partial<UserProfile>) => {
+    if (!firebaseUser || !user) return;
+    const patch: Partial<UserProfile> = {};
+    for (const key of SELF_EDITABLE_FIELDS) {
+      if (data[key] !== undefined) (patch as Record<string, unknown>)[key] = data[key];
     }
-
-    // Set immediate persona state
-    setUser({
-      id: target.id,
-      name: target.name,
-      email: target.email,
-      phone: target.phone,
-      role: target.role,
-      technicianType: target.technicianType,
-      status: "ACTIVE",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
+    const updated = { ...patch, updatedAt: new Date().toISOString() };
+    await setDoc(doc(db, "users", firebaseUser.uid), updated, { merge: true });
+    setUser({ ...user, ...updated });
   };
 
-  // Update profile details
-  const updateProfile = async (data: Partial<UserProfile>) => {
-    if (!user) return;
-    const targetUid = firebaseUser?.uid || user.id;
-    const userRef = doc(db, "users", targetUid);
-    const updated = {
-      ...user,
-      ...data,
-      updatedAt: new Date().toISOString(),
-    };
-    await setDoc(userRef, updated, { merge: true });
-    setUser(updated);
+  const resendVerificationEmail = async () => {
+    if (auth.currentUser && !auth.currentUser.emailVerified) {
+      await sendEmailVerification(auth.currentUser);
+    }
+  };
+
+  // Removes the profile and the Firebase Auth account. Orders, repairs and payments
+  // are kept as business records.
+  const deleteAccount = async (currentPassword: string) => {
+    const current = auth.currentUser;
+    if (!current?.email) throw new Error("No signed-in user.");
+    await reauthenticateWithCredential(current, EmailAuthProvider.credential(current.email, currentPassword));
+    await deleteDoc(doc(db, "customers", current.uid)).catch(() => undefined);
+    await deleteDoc(doc(db, "users", current.uid));
+    await deleteUser(current);
+    setUser(null);
   };
 
   return (
@@ -310,13 +242,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: user?.role || "customer",
         technicianType: user?.technicianType,
         isLoading,
-        activePersonaId,
         signIn,
         signUp,
         signOut,
         resetPassword,
-        switchPersona,
         updateProfile,
+        resendVerificationEmail,
+        deleteAccount,
       }}
     >
       {children}

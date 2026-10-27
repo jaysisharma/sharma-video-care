@@ -9,9 +9,10 @@ const AUTH_PATHS = ["/login", "/register", "/forgot-password"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isAuth = AUTH_PATHS.some((path) => pathname === path || pathname?.startsWith(`${path}/`));
+  const isAuth = AUTH_PATHS.some((path) => pathname === path || pathname?.startsWith(`[object Object]/`));
+  const isAdmin = pathname === "/admin" || pathname?.startsWith("/admin/");
 
-  if (isAuth) {
+  if (isAuth || isAdmin) {
     return <main style={{ minHeight: "100vh" }}>{children}</main>;
   }
 

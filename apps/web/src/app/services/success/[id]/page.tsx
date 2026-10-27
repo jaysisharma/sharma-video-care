@@ -52,7 +52,7 @@ export default function ServiceSuccessPage() {
         Service Request Received!
       </h1>
       <p style={{ color: "var(--color-muted)", fontSize: "1rem", lineHeight: 1.6, marginBottom: "2rem" }}>
-        Your request has been routed to the Sharma Video Care technical team in Janakpur. We will assign a technician to schedule your free inspection.
+        Your request has been routed to the QuickySewa technical team in Janakpur. We will assign a technician to schedule your free inspection.
       </p>
 
       {/* Request Summary Card */}
