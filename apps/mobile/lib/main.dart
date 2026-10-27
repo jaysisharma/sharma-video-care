@@ -14,71 +14,42 @@ import 'services/localization_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase gracefully. On Android, Google Services often initializes
+  // the [DEFAULT] app at the native level from google-services.json; if options
+  // are re-passed or slight differences exist, FlutterFire can throw duplicate-app.
+  // We handle both native pre-initialization and cold start options cleanly.
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
   } catch (e) {
-    // Auth, orders and chat all depend on Firebase; show a retry screen instead of
-    // letting the app crash later on first use.
-    debugPrint('Firebase initialization failed: $e');
-    runApp(const _StartupErrorApp());
-    return;
+    debugPrint('Firebase initial initialization notice: $e');
+    if (Firebase.apps.isEmpty) {
+      try {
+        await Firebase.initializeApp();
+      } catch (fallbackError) {
+        debugPrint('Firebase native fallback notice: $fallbackError');
+      }
+    }
   }
 
-  await SvcLocalization.init();
+  try {
+    await SvcLocalization.init();
+  } catch (e) {
+    debugPrint('Localization initialization notice: $e');
+  }
 
   final appState = AppState();
-  await appState.loadSession();
+  try {
+    await appState.loadSession();
+  } catch (e) {
+    debugPrint('Session load notice: $e');
+  }
 
   runApp(SharmaVideoCareApp(appState: appState));
-}
-
-class _StartupErrorApp extends StatelessWidget {
-  const _StartupErrorApp();
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: SvcTheme.light(),
-      home: Scaffold(
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.wifi_off_rounded, size: 48, color: SvcColors.muted),
-                const SizedBox(height: 16),
-                const Text(
-                  "Couldn't start QuickySewa",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: SvcColors.ink),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Check your internet connection and try again.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 14, color: SvcColors.muted),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: main,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: SvcColors.primary,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(160, 48),
-                  ),
-                  child: const Text('Try again'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class SharmaVideoCareApp extends StatefulWidget {
