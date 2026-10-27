@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -62,28 +61,34 @@ void main() async {
     );
   };
 
-  // Initialize Firebase gracefully. On Android, the native google-services
-  // plugin pre-initializes [DEFAULT] from google-services.json. Calling
-  // initializeApp() with no options binds Flutter to that native instance.
-  // If that fails or isn't present, we fall back to DefaultFirebaseOptions.
+  // Initialize Firebase gracefully.
+  // We first initialize with DefaultFirebaseOptions. If the native platform
+  // (Android/iOS) already created the [DEFAULT] instance, we bind to it
+  // via Firebase.app() on duplicate-app. Otherwise we fallback cleanly.
   try {
-    if (defaultTargetPlatform == TargetPlatform.android) {
+    if (Firebase.apps.isEmpty) {
       try {
-        await Firebase.initializeApp();
-      } catch (_) {
-        if (Firebase.apps.isEmpty) {
-          await Firebase.initializeApp(
-            options: DefaultFirebaseOptions.currentPlatform,
-          );
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+      } on FirebaseException catch (e) {
+        if (e.code == 'duplicate-app') {
+          Firebase.app();
+        } else {
+          rethrow;
         }
       }
-    } else {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
     }
   } catch (e) {
-    debugPrint('Firebase initialization notice: $e');
+    try {
+      Firebase.app();
+    } catch (_) {
+      try {
+        await Firebase.initializeApp();
+      } catch (fallbackError) {
+        debugPrint('Firebase initialization notice: $e | Fallback: $fallbackError');
+      }
+    }
   }
 
   try {

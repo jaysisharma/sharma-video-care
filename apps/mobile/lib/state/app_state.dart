@@ -57,14 +57,17 @@ class AppState extends ChangeNotifier {
   List<UserAddress> get savedAddresses => List.unmodifiable(_savedAddresses);
   List<RegisteredGear> get registeredGear => List.unmodifiable(_registeredGear);
 
+  StreamSubscription<User?>? _authSubscription;
+
   AppState() {
     _initAuthListener();
   }
 
   void _initAuthListener() {
     if (!FirestoreService().isFirebaseAvailable) return;
+    if (_authSubscription != null) return;
     try {
-      FirestoreService().auth.authStateChanges().listen((fbUser) async {
+      _authSubscription = FirestoreService().auth.authStateChanges().listen((fbUser) async {
         if (_authInFlight) return;
         if (fbUser != null && !fbUser.isAnonymous) {
           if (_currentUser?.id != fbUser.uid || !_isAuthenticated) {
@@ -310,6 +313,7 @@ class AppState extends ChangeNotifier {
     _authInFlight = true;
     try {
       final fbUser = await FirestoreService().signIn(email: email, password: password);
+      _initAuthListener();
       await _syncFirebaseUser(fbUser, throwIfBlocked: true);
     } finally {
       _authInFlight = false;
@@ -320,6 +324,7 @@ class AppState extends ChangeNotifier {
     _authInFlight = true;
     try {
       final fbUser = await FirestoreService().signInWithGoogle();
+      _initAuthListener();
       await _syncFirebaseUser(fbUser, throwIfBlocked: true);
     } finally {
       _authInFlight = false;
@@ -330,6 +335,7 @@ class AppState extends ChangeNotifier {
     _authInFlight = true;
     try {
       final fbUser = await FirestoreService().signInWithApple();
+      _initAuthListener();
       await _syncFirebaseUser(fbUser, throwIfBlocked: true);
     } finally {
       _authInFlight = false;
@@ -352,6 +358,7 @@ class AppState extends ChangeNotifier {
         phone: phone,
         password: password,
       );
+      _initAuthListener();
       _currentUser = user;
       _isAuthenticated = true;
       await _loadUserData(user.id);

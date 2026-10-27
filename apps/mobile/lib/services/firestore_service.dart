@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
+import '../firebase_options.dart';
 import 'google_auth_service.dart';
 
 class FirestoreService {
@@ -11,20 +12,74 @@ class FirestoreService {
   factory FirestoreService() => _instance;
   FirestoreService._internal();
 
-  bool get isFirebaseAvailable => Firebase.apps.isNotEmpty;
+  /// Ensures Firebase core is ready before performing operations.
+  /// If Firebase was not ready during main() cold start, this initializes it on demand.
+  Future<void> ensureInitialized() async {
+    if (isFirebaseAvailable) return;
+    try {
+      if (Firebase.apps.isEmpty) {
+        try {
+          await Firebase.initializeApp(
+            options: DefaultFirebaseOptions.currentPlatform,
+          );
+        } on FirebaseException catch (e) {
+          if (e.code == 'duplicate-app') {
+            Firebase.app();
+          } else {
+            rethrow;
+          }
+        }
+      }
+    } catch (_) {
+      try {
+        Firebase.app();
+      } catch (_) {
+        try {
+          await Firebase.initializeApp();
+        } catch (_) {}
+      }
+    }
+  }
+
+  bool get isFirebaseAvailable {
+    if (Firebase.apps.isNotEmpty) return true;
+    try {
+      Firebase.app();
+      return true;
+    } catch (_) {
+      try {
+        FirebaseAuth.instance;
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+  }
 
   FirebaseFirestore get db {
-    if (Firebase.apps.isEmpty) {
-      throw StateError("Firebase has not been initialized yet.");
+    try {
+      return FirebaseFirestore.instance;
+    } catch (_) {
+      try {
+        Firebase.app();
+        return FirebaseFirestore.instance;
+      } catch (e) {
+        throw StateError("Firebase Firestore unavailable: $e");
+      }
     }
-    return FirebaseFirestore.instance;
   }
 
   FirebaseAuth get auth {
-    if (Firebase.apps.isEmpty) {
-      throw StateError("Firebase has not been initialized yet.");
+    try {
+      return FirebaseAuth.instance;
+    } catch (_) {
+      try {
+        Firebase.app();
+        return FirebaseAuth.instance;
+      } catch (e) {
+        throw StateError("Firebase Auth unavailable: $e");
+      }
     }
-    return FirebaseAuth.instance;
   }
 
   FirebaseFirestore get _db => db;
@@ -54,6 +109,7 @@ class FirestoreService {
   /// Authenticates only. The profile is loaded by AppState so there is a single
   /// place that reads it (and can fall back when Firestore is unreachable).
   Future<User> signIn({required String email, required String password}) async {
+    await ensureInitialized();
     final cred = await _auth.signInWithEmailAndPassword(
       email: email.trim(),
       password: password,
@@ -137,6 +193,7 @@ class FirestoreService {
     required String phone,
     required String password,
   }) async {
+    await ensureInitialized();
     final cleanName = name.trim();
     final cleanEmail = email.trim();
     final credential = EmailAuthProvider.credential(email: cleanEmail, password: password);
@@ -230,12 +287,14 @@ class FirestoreService {
   }
 
   Future<void> sendPasswordResetEmail(String email) async {
+    await ensureInitialized();
     await _auth.sendPasswordResetEmail(email: email.trim());
   }
 
   bool get isEmailVerified => _auth.currentUser?.emailVerified ?? false;
 
   Future<void> resendVerificationEmail() async {
+    await ensureInitialized();
     final user = _auth.currentUser;
     if (user != null && !user.emailVerified) {
       await user.sendEmailVerification();
@@ -248,6 +307,7 @@ class FirestoreService {
   /// their support conversation is kept; if that Google account already exists, it
   /// simply signs in to it.
   Future<User> signInWithGoogle() async {
+    await ensureInitialized();
     final idToken = await GoogleAuthService.requestIdToken();
     final credential = GoogleAuthProvider.credential(idToken: idToken);
 
@@ -264,6 +324,7 @@ class FirestoreService {
 
   /// Signs in with Apple (iOS). Like Google, an anonymous guest is upgraded in place.
   Future<User> signInWithApple() async {
+    await ensureInitialized();
     final provider = AppleAuthProvider()..addScope('email')..addScope('name');
     final current = _auth.currentUser;
     UserCredential cred;
